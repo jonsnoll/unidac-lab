@@ -4,12 +4,37 @@ import './DevicePalette.css'
 
 
 function DeviceItem({ device }) {
+  const onDragStart = (event) => {
+    const payload = {
+      template_id: device.id,
+    }
+
+    event.dataTransfer.setData(
+      'application/unidac-device',
+      JSON.stringify(payload),
+    )
+
+    event.dataTransfer.setData(
+      'text/plain',
+      device.id,
+    )
+
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+
+
   return (
     <div
       className="device-item"
       title={device.description}
+      draggable
+      onDragStart={onDragStart}
     >
-      <div className={`device-icon device-icon-${device.kind}`}>
+      <div
+        className={
+          `device-icon device-icon-${device.kind}`
+        }
+      >
         {device.kind === 'cloud' && '☁'}
         {device.kind === 'network' && '◇'}
         {device.kind === 'vm' && '▣'}
@@ -23,6 +48,7 @@ function DeviceItem({ device }) {
 
         <span>
           {device.runtime}
+
           {device.image_required
             ? ' · image required'
             : ''}
@@ -40,6 +66,7 @@ function DeviceSection({
   if (!devices.length) {
     return null
   }
+
 
   return (
     <section className="device-section">
@@ -63,6 +90,7 @@ function DeviceSection({
 function DevicePalette({ devices }) {
   const [search, setSearch] = useState('')
 
+
   const filteredDevices = useMemo(() => {
     const query =
       search.trim().toLowerCase()
@@ -70,6 +98,7 @@ function DevicePalette({ devices }) {
     if (!query) {
       return devices
     }
+
 
     return devices.filter((device) => {
       const text = [
@@ -160,6 +189,7 @@ function DevicePalette({ devices }) {
           devices={endpoints}
         />
 
+
         {vendors.map((vendor) => (
           <DeviceSection
             key={vendor}
@@ -172,6 +202,7 @@ function DevicePalette({ devices }) {
             }
           />
         ))}
+
 
         {!filteredDevices.length && (
           <div className="palette-empty">

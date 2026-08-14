@@ -166,3 +166,12 @@
 
   color: #8a9095;
 }
+
+.device-item {
+  cursor: grab;
+  user-select: none;
+}
+
+.device-item:active {
+  cursor: grabbing;
+}

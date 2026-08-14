@@ -170,3 +170,17 @@ body {
 
   position: relative;
 }
+
+.lab-node-planned {
+  border: 2px dashed #b7862f !important;
+  border-top: 4px solid #b7862f !important;
+  background: #fffdf8 !important;
+}
+
+.node-planned-state {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+
+  color: #9a6e1f;
+}

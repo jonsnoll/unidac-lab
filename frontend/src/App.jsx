@@ -62,7 +62,7 @@ const DEFAULT_POSITIONS = {
 }
 
 
-function createNode(
+function createRealNode(
   node,
   index,
   savedPositions,
@@ -73,6 +73,7 @@ function createNode(
       x: 100 + index * 180,
       y: 650,
     }
+
 
   let subtitle = ''
 
@@ -87,6 +88,7 @@ function createNode(
   if (node.type === 'host') {
     subtitle = node.state
   }
+
 
   return {
     id: node.id,
@@ -116,6 +118,50 @@ function createNode(
 }
 
 
+function createPlannedNode(
+  desiredNode,
+  device,
+  index,
+  position,
+) {
+  const fallbackPosition = {
+    x: 300 + index * 30,
+    y: 150 + index * 30,
+  }
+
+
+  return {
+    id: desiredNode.id,
+
+    position:
+      position ||
+      fallbackPosition,
+
+    data: {
+      label: (
+        <div className="node-content">
+          <div className="node-planned-state">
+            PLANNED
+          </div>
+
+          <strong>
+            {desiredNode.name}
+          </strong>
+
+          <span>
+            {device?.name ||
+              desiredNode.template_id}
+          </span>
+        </div>
+      ),
+    },
+
+    className:
+      'lab-node lab-node-planned',
+  }
+}
+
+
 function createEdge(link) {
   return {
     id: link.id,
@@ -139,6 +185,20 @@ function createEdge(link) {
 }
 
 
+function createPlannedName(
+  device,
+  desiredNodes,
+) {
+  const count =
+    desiredNodes.filter(
+      (node) =>
+        node.template_id === device.id
+    ).length + 1
+
+  return `${device.name} ${count}`
+}
+
+
 function App() {
   const [
     nodes,
@@ -146,25 +206,47 @@ function App() {
     onNodesChange,
   ] = useNodesState([])
 
+
   const [
     edges,
     setEdges,
     onEdgesChange,
   ] = useEdgesState([])
 
+
+  const [
+    reactFlowInstance,
+    setReactFlowInstance,
+  ] = useState(null)
+
+
   const [
     catalogDevices,
     setCatalogDevices,
   ] = useState([])
 
+
+  const [
+    desiredTopology,
+    setDesiredTopology,
+  ] = useState({
+    schema_version: 1,
+    nodes: [],
+    links: [],
+  })
+
+
   const [labInfo, setLabInfo] =
     useState(null)
+
 
   const [loading, setLoading] =
     useState(true)
 
+
   const [error, setError] =
     useState(null)
+
 
   const [
     saveStatus,
@@ -179,10 +261,12 @@ function App() {
           topologyResponse,
           layoutResponse,
           catalogResponse,
+          desiredResponse,
         ] = await Promise.all([
           fetch('/api/lab/topology'),
           fetch('/api/lab/layout'),
           fetch('/api/catalog/devices'),
+          fetch('/api/lab/desired'),
         ])
 
 
@@ -207,6 +291,13 @@ function App() {
         }
 
 
+        if (!desiredResponse.ok) {
+          throw new Error(
+            `Desired API respondeu HTTP ${desiredResponse.status}`
+          )
+        }
+
+
         const topology =
           await topologyResponse.json()
 
@@ -215,6 +306,9 @@ function App() {
 
         const catalog =
           await catalogResponse.json()
+
+        const desired =
+          await desiredResponse.json()
 
 
         const savedPositions = {}
@@ -228,24 +322,56 @@ function App() {
         }
 
 
+        const catalogMap =
+          Object.fromEntries(
+            (catalog.devices || []).map(
+              (device) => [
+                device.id,
+                device,
+              ]
+            )
+          )
+
+
+        const realNodes =
+          topology.nodes.map(
+            (node, index) =>
+              createRealNode(
+                node,
+                index,
+                savedPositions,
+              )
+          )
+
+
+        const plannedNodes =
+          (desired.nodes || []).map(
+            (node, index) =>
+              createPlannedNode(
+                node,
+                catalogMap[
+                  node.template_id
+                ],
+                index,
+                savedPositions[node.id],
+              )
+          )
+
+
         setLabInfo(topology)
 
         setCatalogDevices(
           catalog.devices || []
         )
 
-
-        setNodes(
-          topology.nodes.map(
-            (node, index) =>
-              createNode(
-                node,
-                index,
-                savedPositions,
-              )
-          )
+        setDesiredTopology(
+          desired
         )
 
+        setNodes([
+          ...realNodes,
+          ...plannedNodes,
+        ])
 
         setEdges(
           topology.links.map(
@@ -258,6 +384,7 @@ function App() {
         setLoading(false)
       }
     }
+
 
     loadLab()
   }, [setNodes, setEdges])
@@ -279,15 +406,41 @@ function App() {
       }
 
 
-      setSaveStatus(
-        'Salvando...'
-      )
+      const response =
+        await fetch(
+          '/api/lab/layout',
+          {
+            method: 'PUT',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              ),
+          }
+        )
 
 
-      try {
+      if (!response.ok) {
+        throw new Error(
+          `Layout HTTP ${response.status}`
+        )
+      }
+    },
+    []
+  )
+
+
+  const saveDesiredTopology =
+    useCallback(
+      async (topology) => {
         const response =
           await fetch(
-            '/api/lab/layout',
+            '/api/lab/desired',
             {
               method: 'PUT',
 
@@ -298,7 +451,7 @@ function App() {
 
               body:
                 JSON.stringify(
-                  payload
+                  topology
                 ),
             }
           )
@@ -306,39 +459,23 @@ function App() {
 
         if (!response.ok) {
           throw new Error(
-            `HTTP ${response.status}`
+            `Desired HTTP ${response.status}`
           )
         }
 
 
-        setSaveStatus(
-          'Layout salvo'
-        )
-
-
-        window.setTimeout(
-          () =>
-            setSaveStatus(''),
-          1500,
-        )
-      } catch (err) {
-        console.error(
-          'Erro ao salvar layout:',
-          err,
-        )
-
-        setSaveStatus(
-          'Erro ao salvar layout'
-        )
-      }
-    },
-    []
-  )
+        return response.json()
+      },
+      []
+    )
 
 
   const onNodeDragStop =
     useCallback(
-      (_event, draggedNode) => {
+      async (
+        _event,
+        draggedNode,
+      ) => {
         const updatedNodes =
           nodes.map((node) => {
             if (
@@ -350,6 +487,7 @@ function App() {
 
             return {
               ...node,
+
               position:
                 draggedNode.position,
             }
@@ -360,13 +498,203 @@ function App() {
           updatedNodes
         )
 
-        saveLayout(
-          updatedNodes
+        setSaveStatus(
+          'Salvando layout...'
         )
+
+
+        try {
+          await saveLayout(
+            updatedNodes
+          )
+
+          setSaveStatus(
+            'Layout salvo'
+          )
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1500,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao salvar layout'
+          )
+        }
       },
       [
         nodes,
         setNodes,
+        saveLayout,
+      ]
+    )
+
+
+  const onDragOver =
+    useCallback((event) => {
+      event.preventDefault()
+
+      event.dataTransfer.dropEffect =
+        'copy'
+    }, [])
+
+
+  const onDrop =
+    useCallback(
+      async (event) => {
+        event.preventDefault()
+
+
+        if (!reactFlowInstance) {
+          return
+        }
+
+
+        const rawData =
+          event.dataTransfer.getData(
+            'application/unidac-device'
+          )
+
+
+        if (!rawData) {
+          return
+        }
+
+
+        let dragData
+
+        try {
+          dragData =
+            JSON.parse(rawData)
+        } catch {
+          return
+        }
+
+
+        const device =
+          catalogDevices.find(
+            (item) =>
+              item.id ===
+              dragData.template_id
+          )
+
+
+        if (!device) {
+          return
+        }
+
+
+        const position =
+          reactFlowInstance
+            .screenToFlowPosition({
+              x: event.clientX,
+              y: event.clientY,
+            })
+
+
+        const desiredNodes =
+          desiredTopology.nodes || []
+
+
+        const nodeId =
+          `planned:${crypto.randomUUID()}`
+
+
+        const newDesiredNode = {
+          id: nodeId,
+
+          template_id:
+            device.id,
+
+          name:
+            createPlannedName(
+              device,
+              desiredNodes,
+            ),
+
+          state: 'planned',
+
+          properties: {},
+        }
+
+
+        const updatedDesired = {
+          ...desiredTopology,
+
+          nodes: [
+            ...desiredNodes,
+            newDesiredNode,
+          ],
+        }
+
+
+        const newFlowNode =
+          createPlannedNode(
+            newDesiredNode,
+            device,
+            desiredNodes.length,
+            position,
+          )
+
+
+        const updatedNodes = [
+          ...nodes,
+          newFlowNode,
+        ]
+
+
+        setSaveStatus(
+          'Salvando device...'
+        )
+
+
+        try {
+          await saveDesiredTopology(
+            updatedDesired
+          )
+
+          await saveLayout(
+            updatedNodes
+          )
+
+
+          setDesiredTopology(
+            updatedDesired
+          )
+
+          setNodes(
+            updatedNodes
+          )
+
+
+          setSaveStatus(
+            'Device planejado salvo'
+          )
+
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1800,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao salvar device'
+          )
+        }
+      },
+      [
+        reactFlowInstance,
+        catalogDevices,
+        desiredTopology,
+        nodes,
+        setNodes,
+        saveDesiredTopology,
         saveLayout,
       ]
     )
@@ -431,6 +759,10 @@ function App() {
             nodes={nodes}
             edges={edges}
 
+            onInit={
+              setReactFlowInstance
+            }
+
             onNodesChange={
               onNodesChange
             }
@@ -441,6 +773,14 @@ function App() {
 
             onNodeDragStop={
               onNodeDragStop
+            }
+
+            onDragOver={
+              onDragOver
+            }
+
+            onDrop={
+              onDrop
             }
 
             fitView
