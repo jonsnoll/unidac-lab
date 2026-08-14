@@ -87,7 +87,10 @@ function DeviceSection({
 }
 
 
-function DevicePalette({ devices }) {
+function DevicePalette({
+  devices,
+  onImportImage,
+}) {
   const [search, setSearch] = useState('')
 
 
@@ -163,6 +166,14 @@ function DevicePalette({ devices }) {
             {devices.length} available
           </span>
         </div>
+
+        <button
+          type="button"
+          className="palette-import-image"
+          onClick={onImportImage}
+        >
+          + Image
+        </button>
       </div>
 
 

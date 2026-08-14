@@ -175,3 +175,30 @@
 .device-item:active {
   cursor: grabbing;
 }
+
+.palette-header {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.palette-import-image {
+  padding: 6px 9px;
+
+  border:
+    1px solid #d3d8db;
+  border-radius: 6px;
+
+  background: #ffffff;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  color: #515a55;
+}
+
+.palette-import-image:hover {
+  background: #f4f6f4;
+  border-color: #aeb7b1;
+}

@@ -15,6 +15,7 @@ import {
 
 import DevicePalette from './components/DevicePalette'
 import NodePropertiesPanel from './components/NodePropertiesPanel'
+import ImageImportModal from './components/ImageImportModal'
 
 import '@xyflow/react/dist/style.css'
 import './App.css'
@@ -231,6 +232,12 @@ function App() {
     imageLibrary,
     setImageLibrary,
   ] = useState([])
+
+
+  const [
+    showImageImport,
+    setShowImageImport,
+  ] = useState(false)
 
 
   const [
@@ -942,6 +949,31 @@ function App() {
     )
 
 
+  const refreshImageLibrary =
+    useCallback(
+      async () => {
+        const response =
+          await fetch(
+            '/api/images'
+          )
+
+        if (!response.ok) {
+          throw new Error(
+            `Images HTTP ${response.status}`
+          )
+        }
+
+        const data =
+          await response.json()
+
+        setImageLibrary(
+          data.images || []
+        )
+      },
+      []
+    )
+
+
   if (loading) {
     return (
       <div className="message-screen">
@@ -993,6 +1025,12 @@ function App() {
       <div className="workspace">
         <DevicePalette
           devices={catalogDevices}
+
+          onImportImage={() =>
+            setShowImageImport(
+              true
+            )
+          }
         />
 
 
@@ -1080,6 +1118,25 @@ function App() {
           />
         )}
       </div>
+
+
+      {showImageImport && (
+        <ImageImportModal
+          devices={
+            catalogDevices
+          }
+
+          onClose={() =>
+            setShowImageImport(
+              false
+            )
+          }
+
+          onImported={
+            refreshImageLibrary
+          }
+        />
+      )}
     </div>
   )
 }
