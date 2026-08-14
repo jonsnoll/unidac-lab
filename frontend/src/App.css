@@ -154,3 +154,19 @@ body {
   font-weight: 500;
   color: #72777d !important;
 }
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace .canvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+
+  position: relative;
+}

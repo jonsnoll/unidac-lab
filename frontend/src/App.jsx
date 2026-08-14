@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react'
+
 import {
   Background,
   Controls,
@@ -8,26 +13,60 @@ import {
   useNodesState,
 } from '@xyflow/react'
 
+import DevicePalette from './components/DevicePalette'
+
 import '@xyflow/react/dist/style.css'
 import './App.css'
 
 
 const DEFAULT_POSITIONS = {
-  'net:default': { x: 390, y: 20 },
+  'net:default': {
+    x: 390,
+    y: 20,
+  },
 
-  'vm:FGT-DC-A': { x: 130, y: 180 },
-  'net:UNDERLAY': { x: 400, y: 195 },
-  'vm:FGT-DC-B': { x: 670, y: 180 },
+  'vm:FGT-DC-A': {
+    x: 130,
+    y: 180,
+  },
 
-  'net:LAN-DC-A': { x: 145, y: 370 },
-  'net:LAN-DC-B': { x: 685, y: 370 },
+  'net:UNDERLAY': {
+    x: 400,
+    y: 195,
+  },
 
-  'host:HOST-A': { x: 145, y: 540 },
-  'host:HOST-B': { x: 685, y: 540 },
+  'vm:FGT-DC-B': {
+    x: 670,
+    y: 180,
+  },
+
+  'net:LAN-DC-A': {
+    x: 145,
+    y: 370,
+  },
+
+  'net:LAN-DC-B': {
+    x: 685,
+    y: 370,
+  },
+
+  'host:HOST-A': {
+    x: 145,
+    y: 540,
+  },
+
+  'host:HOST-B': {
+    x: 685,
+    y: 540,
+  },
 }
 
 
-function createNode(node, index, savedPositions) {
+function createNode(
+  node,
+  index,
+  savedPositions,
+) {
   const position =
     savedPositions[node.id] ||
     DEFAULT_POSITIONS[node.id] || {
@@ -71,7 +110,8 @@ function createNode(node, index, savedPositions) {
       ),
     },
 
-    className: `lab-node lab-node-${node.type}`,
+    className:
+      `lab-node lab-node-${node.type}`,
   }
 }
 
@@ -100,16 +140,36 @@ function createEdge(link) {
 
 
 function App() {
-  const [nodes, setNodes, onNodesChange] =
-    useNodesState([])
+  const [
+    nodes,
+    setNodes,
+    onNodesChange,
+  ] = useNodesState([])
 
-  const [edges, setEdges, onEdgesChange] =
-    useEdgesState([])
+  const [
+    edges,
+    setEdges,
+    onEdgesChange,
+  ] = useEdgesState([])
 
-  const [labInfo, setLabInfo] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [saveStatus, setSaveStatus] = useState('')
+  const [
+    catalogDevices,
+    setCatalogDevices,
+  ] = useState([])
+
+  const [labInfo, setLabInfo] =
+    useState(null)
+
+  const [loading, setLoading] =
+    useState(true)
+
+  const [error, setError] =
+    useState(null)
+
+  const [
+    saveStatus,
+    setSaveStatus,
+  ] = useState('')
 
 
   useEffect(() => {
@@ -118,10 +178,13 @@ function App() {
         const [
           topologyResponse,
           layoutResponse,
+          catalogResponse,
         ] = await Promise.all([
           fetch('/api/lab/topology'),
           fetch('/api/lab/layout'),
+          fetch('/api/catalog/devices'),
         ])
+
 
         if (!topologyResponse.ok) {
           throw new Error(
@@ -129,11 +192,20 @@ function App() {
           )
         }
 
+
         if (!layoutResponse.ok) {
           throw new Error(
             `Layout API respondeu HTTP ${layoutResponse.status}`
           )
         }
+
+
+        if (!catalogResponse.ok) {
+          throw new Error(
+            `Catalog API respondeu HTTP ${catalogResponse.status}`
+          )
+        }
+
 
         const topology =
           await topologyResponse.json()
@@ -141,14 +213,27 @@ function App() {
         const layout =
           await layoutResponse.json()
 
+        const catalog =
+          await catalogResponse.json()
+
+
         const savedPositions = {}
 
-        for (const node of layout.nodes || []) {
+        for (
+          const node
+          of layout.nodes || []
+        ) {
           savedPositions[node.id] =
             node.position
         }
 
+
         setLabInfo(topology)
+
+        setCatalogDevices(
+          catalog.devices || []
+        )
+
 
         setNodes(
           topology.nodes.map(
@@ -161,8 +246,11 @@ function App() {
           )
         )
 
+
         setEdges(
-          topology.links.map(createEdge)
+          topology.links.map(
+            createEdge
+          )
         )
       } catch (err) {
         setError(err.message)
@@ -190,22 +278,31 @@ function App() {
         ),
       }
 
-      setSaveStatus('Salvando...')
+
+      setSaveStatus(
+        'Salvando...'
+      )
+
 
       try {
-        const response = await fetch(
-          '/api/lab/layout',
-          {
-            method: 'PUT',
+        const response =
+          await fetch(
+            '/api/lab/layout',
+            {
+              method: 'PUT',
 
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
 
-            body: JSON.stringify(payload),
-          }
-        )
+              body:
+                JSON.stringify(
+                  payload
+                ),
+            }
+          )
+
 
         if (!response.ok) {
           throw new Error(
@@ -213,10 +310,15 @@ function App() {
           )
         }
 
-        setSaveStatus('Layout salvo')
+
+        setSaveStatus(
+          'Layout salvo'
+        )
+
 
         window.setTimeout(
-          () => setSaveStatus(''),
+          () =>
+            setSaveStatus(''),
           1500,
         )
       } catch (err) {
@@ -234,29 +336,40 @@ function App() {
   )
 
 
-  const onNodeDragStop = useCallback(
-    (_event, draggedNode) => {
-      const updatedNodes =
-        nodes.map((node) => {
-          if (node.id !== draggedNode.id) {
-            return node
-          }
+  const onNodeDragStop =
+    useCallback(
+      (_event, draggedNode) => {
+        const updatedNodes =
+          nodes.map((node) => {
+            if (
+              node.id !==
+              draggedNode.id
+            ) {
+              return node
+            }
 
-          return {
-            ...node,
-            position: draggedNode.position,
-          }
-        })
+            return {
+              ...node,
+              position:
+                draggedNode.position,
+            }
+          })
 
-      setNodes(updatedNodes)
-      saveLayout(updatedNodes)
-    },
-    [
-      nodes,
-      setNodes,
-      saveLayout,
-    ]
-  )
+
+        setNodes(
+          updatedNodes
+        )
+
+        saveLayout(
+          updatedNodes
+        )
+      },
+      [
+        nodes,
+        setNodes,
+        saveLayout,
+      ]
+    )
 
 
   if (loading) {
@@ -271,7 +384,7 @@ function App() {
   if (error) {
     return (
       <div className="message-screen error">
-        Erro ao carregar topologia:
+        Erro ao carregar:
         <br />
         {error}
       </div>
@@ -292,6 +405,7 @@ function App() {
           </span>
         </div>
 
+
         <div className="lab-status">
           {saveStatus && (
             <span className="save-status">
@@ -306,42 +420,49 @@ function App() {
       </header>
 
 
-      <main className="canvas">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
+      <div className="workspace">
+        <DevicePalette
+          devices={catalogDevices}
+        />
 
-          onNodesChange={
-            onNodesChange
-          }
 
-          onEdgesChange={
-            onEdgesChange
-          }
+        <main className="canvas">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
 
-          onNodeDragStop={
-            onNodeDragStop
-          }
+            onNodesChange={
+              onNodesChange
+            }
 
-          fitView
+            onEdgesChange={
+              onEdgesChange
+            }
 
-          fitViewOptions={{
-            padding: 0.2,
-          }}
-        >
-          <Background
-            gap={24}
-            size={1}
-          />
+            onNodeDragStop={
+              onNodeDragStop
+            }
 
-          <MiniMap
-            pannable
-            zoomable
-          />
+            fitView
 
-          <Controls />
-        </ReactFlow>
-      </main>
+            fitViewOptions={{
+              padding: 0.2,
+            }}
+          >
+            <Background
+              gap={24}
+              size={1}
+            />
+
+            <MiniMap
+              pannable
+              zoomable
+            />
+
+            <Controls />
+          </ReactFlow>
+        </main>
+      </div>
     </div>
   )
 }
