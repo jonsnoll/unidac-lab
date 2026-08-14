@@ -202,3 +202,8 @@ app.include_router(
 from app.image_router import router as image_router
 
 app.include_router(image_router)
+
+
+from app.apply_router import router as apply_router
+
+app.include_router(apply_router)
