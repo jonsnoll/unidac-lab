@@ -45,3 +45,53 @@ def image_details(
         )
 
     return image
+
+
+from fastapi import (
+    File,
+    Form,
+    UploadFile,
+)
+
+from app.image_import_service import (
+    import_image,
+)
+
+
+@router.post("/import")
+def import_image_endpoint(
+    image_id: str = Form(...),
+    name: str = Form(...),
+    vendor: str = Form(...),
+    version: str = Form("unknown"),
+    template_id: str = Form(...),
+    image_format: str = Form(...),
+    file: UploadFile = File(...),
+):
+    try:
+        metadata = import_image(
+            source_file=file.file,
+            image_id=image_id,
+            name=name,
+            vendor=vendor,
+            version=version,
+            template_id=template_id,
+            image_format=image_format,
+        )
+
+        return {
+            "status": "imported",
+            "image": metadata,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
