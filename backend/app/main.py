@@ -197,3 +197,8 @@ from app.desired_topology_router import (
 app.include_router(
     desired_topology_router
 )
+
+
+from app.image_router import router as image_router
+
+app.include_router(image_router)

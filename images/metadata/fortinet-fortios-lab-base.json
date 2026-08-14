@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "fortinet-fortios-lab-base",
+  "name": "FortiOS Lab Base",
+  "vendor": "fortinet",
+  "family": "fortios",
+  "version": "unknown",
+  "kind": "disk-image",
+  "format": "qcow2",
+  "deployment": "qcow2-overlay",
+  "description": "Imagem base FortiOS utilizada para criar overlays independentes de FortiGate VM.",
+  "compatible_templates": [
+    "fortinet-fortigate-vm"
+  ],
+  "storage": {
+    "relative_path": "images/store/fortinet/fortios-lab-base/base.qcow2",
+    "read_only_base": true
+  },
+  "integrity": {
+    "sha256": "faccfe7b76919bc0196ab337bdb5295723012953feac76db8846214ae08a1e3c"
+  },
+  "image_info": {
+    "virtual_size_bytes": 2147483648,
+    "disk_size_bytes": 108331008
+  }
+}
