@@ -1,0 +1,232 @@
+#!/usr/bin/python3
+
+import json
+import os
+import re
+import sys
+
+import libvirt
+
+
+NETWORK_RE = re.compile(
+    r"^ulab-net-[a-f0-9]{8}$"
+)
+
+BRIDGE_RE = re.compile(
+    r"^ulb[a-f0-9]{8}$"
+)
+
+
+def output(data):
+    print(
+        json.dumps(
+            data,
+            indent=2,
+        )
+    )
+
+
+def fail(message, code=1):
+    output(
+        {
+            "status": "error",
+            "message": message,
+        }
+    )
+
+    raise SystemExit(code)
+
+
+def require_root():
+    if os.geteuid() != 0:
+        fail(
+            "unidac-lab-agent precisa "
+            "ser executado como root."
+        )
+
+
+def get_connection():
+    conn = libvirt.open(
+        "qemu:///system"
+    )
+
+    if conn is None:
+        fail(
+            "Nao foi possivel conectar "
+            "ao libvirt."
+        )
+
+    return conn
+
+
+def health():
+    require_root()
+
+    conn = get_connection()
+
+    try:
+        output(
+            {
+                "status": "ok",
+                "component":
+                    "unidac-lab-agent",
+                "uid": os.geteuid(),
+                "libvirt":
+                    conn.getVersion(),
+            }
+        )
+
+    finally:
+        conn.close()
+
+
+def network_ensure(
+    network_name,
+    bridge_name,
+):
+    require_root()
+
+    if not NETWORK_RE.fullmatch(
+        network_name
+    ):
+        fail(
+            "Nome de rede invalido."
+        )
+
+    if not BRIDGE_RE.fullmatch(
+        bridge_name
+    ):
+        fail(
+            "Nome de bridge invalido."
+        )
+
+    conn = get_connection()
+
+    try:
+        try:
+            network = (
+                conn.networkLookupByName(
+                    network_name
+                )
+            )
+
+            if not network.isActive():
+                network.create()
+
+            output(
+                {
+                    "status": "exists",
+                    "network":
+                        network_name,
+                    "bridge":
+                        network.bridgeName(),
+                    "active":
+                        bool(
+                            network.isActive()
+                        ),
+                    "persistent":
+                        bool(
+                            network.isPersistent()
+                        ),
+                }
+            )
+
+            return
+
+        except libvirt.libvirtError:
+            pass
+
+
+        xml = f"""
+<network>
+  <name>{network_name}</name>
+  <bridge
+    name='{bridge_name}'
+    stp='on'
+    delay='0'
+  />
+</network>
+""".strip()
+
+
+        network = (
+            conn.networkDefineXML(
+                xml
+            )
+        )
+
+        if network is None:
+            fail(
+                "Falha ao definir "
+                "a rede libvirt."
+            )
+
+
+        network.create()
+
+        network.setAutostart(
+            False
+        )
+
+
+        output(
+            {
+                "status": "created",
+                "network":
+                    network_name,
+                "bridge":
+                    network.bridgeName(),
+                "active": True,
+                "persistent": True,
+                "autostart": False,
+            }
+        )
+
+    finally:
+        conn.close()
+
+
+def main():
+    if len(sys.argv) < 2:
+        fail(
+            "Comando nao informado."
+        )
+
+
+    command = sys.argv[1]
+
+
+    if command == "health":
+        if len(sys.argv) != 2:
+            fail(
+                "Uso: health"
+            )
+
+        health()
+
+        return
+
+
+    if command == "network-ensure":
+        if len(sys.argv) != 4:
+            fail(
+                "Uso: network-ensure "
+                "<network> <bridge>"
+            )
+
+        network_ensure(
+            sys.argv[2],
+            sys.argv[3],
+        )
+
+        return
+
+
+    fail(
+        f"Comando desconhecido: "
+        f"{command}"
+    )
+
+
+if __name__ == "__main__":
+    main()
