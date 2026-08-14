@@ -188,3 +188,12 @@ def update_lab_layout(
 from app.catalog_router import router as catalog_router
 
 app.include_router(catalog_router)
+
+
+from app.desired_topology_router import (
+    router as desired_topology_router,
+)
+
+app.include_router(
+    desired_topology_router
+)
