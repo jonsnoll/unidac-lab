@@ -189,3 +189,53 @@
   background: #ffffff;
   color: #9a4242;
 }
+
+.properties-form select {
+  width: 100%;
+
+  padding: 9px 10px;
+
+  border: 1px solid #d5d9dc;
+  border-radius: 6px;
+
+  outline: none;
+
+  background: #ffffff;
+
+  font-size: 12px;
+}
+
+.properties-form select:focus {
+  border-color: #8c969d;
+}
+
+.image-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding: 12px;
+
+  border: 1px solid #dfe3e6;
+  border-radius: 7px;
+
+  background: #fafafa;
+}
+
+.image-details > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.image-details span {
+  font-size: 9px;
+  color: #858b90;
+}
+
+.image-details strong {
+  font-size: 10px;
+  text-align: right;
+}

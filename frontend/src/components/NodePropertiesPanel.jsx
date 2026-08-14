@@ -1,14 +1,32 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 
 import './NodePropertiesPanel.css'
 
 
+function formatBytes(bytes) {
+  if (!bytes) {
+    return '-'
+  }
+
+  const gib = bytes / (1024 ** 3)
+  const mib = bytes / (1024 ** 2)
+
+  if (gib >= 1) {
+    return `${gib.toFixed(1)} GiB`
+  }
+
+  return `${mib.toFixed(0)} MiB`
+}
+
+
 function NodePropertiesPanel({
   node,
   device,
+  images,
   onClose,
   onSave,
   onDelete,
@@ -25,9 +43,39 @@ function NodePropertiesPanel({
   const [interfaces, setInterfaces] =
     useState(1)
 
+  const [imageId, setImageId] =
+    useState('')
+
 
   const isQemu =
     device?.runtime === 'qemu'
+
+
+  const compatibleImages =
+    useMemo(
+      () =>
+        images.filter(
+          (image) =>
+            image.available &&
+            (
+              image.compatible_templates ||
+              []
+            ).includes(
+              node?.template_id
+            )
+        ),
+      [
+        images,
+        node?.template_id,
+      ]
+    )
+
+
+  const selectedImage =
+    compatibleImages.find(
+      (image) =>
+        image.id === imageId
+    )
 
 
   useEffect(() => {
@@ -57,6 +105,11 @@ function NodePropertiesPanel({
       device?.interfaces?.default ??
       1
     )
+
+    setImageId(
+      node.properties?.image_id ??
+      ''
+    )
   }, [node, device])
 
 
@@ -81,6 +134,13 @@ function NodePropertiesPanel({
 
       properties.interfaces =
         Number(interfaces)
+
+      if (imageId) {
+        properties.image_id =
+          imageId
+      } else {
+        delete properties.image_id
+      }
     }
 
     onSave({
@@ -205,17 +265,115 @@ function NodePropertiesPanel({
               Image
             </div>
 
-            <div className="image-placeholder">
-              <strong>
-                No image selected
-              </strong>
 
-              <span>
-                A biblioteca de imagens
-                sera adicionada na proxima
-                etapa.
-              </span>
-            </div>
+            {compatibleImages.length > 0 ? (
+              <>
+                <label>
+                  Image
+
+                  <select
+                    value={imageId}
+                    onChange={(event) =>
+                      setImageId(
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      Select image...
+                    </option>
+
+                    {compatibleImages.map(
+                      (image) => (
+                        <option
+                          key={image.id}
+                          value={image.id}
+                        >
+                          {image.name}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+
+                {selectedImage && (
+                  <div className="image-details">
+                    <div>
+                      <span>
+                        Status
+                      </span>
+
+                      <strong>
+                        Available
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Format
+                      </span>
+
+                      <strong>
+                        {selectedImage.format}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Virtual size
+                      </span>
+
+                      <strong>
+                        {formatBytes(
+                          selectedImage
+                            .image_info
+                            ?.virtual_size_bytes
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Stored size
+                      </span>
+
+                      <strong>
+                        {formatBytes(
+                          selectedImage
+                            .file_size_bytes
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Deployment
+                      </span>
+
+                      <strong>
+                        {
+                          selectedImage
+                            .deployment
+                        }
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="image-placeholder">
+                <strong>
+                  No compatible images
+                </strong>
+
+                <span>
+                  Importe uma imagem
+                  compatível com este
+                  template.
+                </span>
+              </div>
+            )}
           </>
         )}
 

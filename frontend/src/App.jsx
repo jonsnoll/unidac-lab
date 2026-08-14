@@ -228,6 +228,12 @@ function App() {
 
 
   const [
+    imageLibrary,
+    setImageLibrary,
+  ] = useState([])
+
+
+  const [
     desiredTopology,
     setDesiredTopology,
   ] = useState({
@@ -269,11 +275,13 @@ function App() {
           layoutResponse,
           catalogResponse,
           desiredResponse,
+          imagesResponse,
         ] = await Promise.all([
           fetch('/api/lab/topology'),
           fetch('/api/lab/layout'),
           fetch('/api/catalog/devices'),
           fetch('/api/lab/desired'),
+          fetch('/api/images'),
         ])
 
 
@@ -305,6 +313,13 @@ function App() {
         }
 
 
+        if (!imagesResponse.ok) {
+          throw new Error(
+            `Images API respondeu HTTP ${imagesResponse.status}`
+          )
+        }
+
+
         const topology =
           await topologyResponse.json()
 
@@ -316,6 +331,9 @@ function App() {
 
         const desired =
           await desiredResponse.json()
+
+        const images =
+          await imagesResponse.json()
 
 
         const savedPositions = {}
@@ -369,6 +387,10 @@ function App() {
 
         setCatalogDevices(
           catalog.devices || []
+        )
+
+        setImageLibrary(
+          images.images || []
         )
 
         setDesiredTopology(
@@ -1036,6 +1058,10 @@ function App() {
 
             device={
               selectedDevice
+            }
+
+            images={
+              imageLibrary
             }
 
             onClose={() =>
