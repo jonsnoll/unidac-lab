@@ -183,3 +183,8 @@ def update_lab_layout(
             status_code=500,
             detail=str(exc),
         ) from exc
+
+
+from app.catalog_router import router as catalog_router
+
+app.include_router(catalog_router)
