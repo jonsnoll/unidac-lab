@@ -1,11 +1,40 @@
 #!/usr/bin/python3
 
+import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 
 import libvirt
+
+
+PROJECT_ROOT = Path(
+    "/home/felipe/unidac-lab"
+)
+
+PROJECT_IMAGE_STORE = (
+    PROJECT_ROOT
+    / "images"
+    / "store"
+)
+
+RUNTIME_ROOT = Path(
+    "/var/lib/libvirt/images/unidac-lab"
+)
+
+RUNTIME_IMAGE_STORE = (
+    RUNTIME_ROOT
+    / "store"
+)
+
+RUNTIME_LABS = (
+    RUNTIME_ROOT
+    / "labs"
+)
 
 
 NETWORK_RE = re.compile(
@@ -14,6 +43,27 @@ NETWORK_RE = re.compile(
 
 BRIDGE_RE = re.compile(
     r"^ulb[a-f0-9]{8}$"
+)
+
+SAFE_ID_RE = re.compile(
+    r"^[a-z0-9][a-z0-9-]{1,62}$"
+)
+
+DOMAIN_RE = re.compile(
+    r"^ulab-[a-z0-9][a-z0-9-]{1,62}$"
+)
+
+
+def silent_libvirt_error(
+    _context,
+    _error,
+):
+    return None
+
+
+libvirt.registerErrorHandler(
+    silent_libvirt_error,
+    None,
 )
 
 
@@ -45,6 +95,75 @@ def require_root():
         )
 
 
+def validate_id(
+    value,
+    label,
+):
+    if not SAFE_ID_RE.fullmatch(
+        value
+    ):
+        fail(
+            f"{label} invalido: "
+            f"{value}"
+        )
+
+
+def ensure_runtime_dir(path):
+    path.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    shutil.chown(
+        path,
+        user="libvirt-qemu",
+        group="kvm",
+    )
+
+    os.chmod(
+        path,
+        0o755,
+    )
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+
+    with path.open("rb") as file:
+        while True:
+            chunk = file.read(
+                1024 * 1024
+            )
+
+            if not chunk:
+                break
+
+            digest.update(
+                chunk
+            )
+
+    return digest.hexdigest()
+
+
+def qemu_img_info(path):
+    process = subprocess.run(
+        [
+            "qemu-img",
+            "info",
+            "--force-share",
+            "--output=json",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return json.loads(
+        process.stdout
+    )
+
+
 def get_connection():
     conn = libvirt.open(
         "qemu:///system"
@@ -70,9 +189,14 @@ def health():
                 "status": "ok",
                 "component":
                     "unidac-lab-agent",
-                "uid": os.geteuid(),
-                "libvirt":
+                "uid":
+                    os.geteuid(),
+                "libvirt_library":
+                    libvirt.getVersion(),
+                "hypervisor":
                     conn.getVersion(),
+                "runtime_root":
+                    str(RUNTIME_ROOT),
             }
         )
 
@@ -100,6 +224,7 @@ def network_ensure(
             "Nome de bridge invalido."
         )
 
+
     conn = get_connection()
 
     try:
@@ -110,20 +235,46 @@ def network_ensure(
                 )
             )
 
+        except libvirt.libvirtError:
+            network = None
+
+
+        if network is not None:
+            actual_bridge = (
+                network.bridgeName()
+            )
+
+            if (
+                actual_bridge
+                != bridge_name
+            ):
+                fail(
+                    "Rede existente usa "
+                    "bridge inesperada: "
+                    f"{actual_bridge}"
+                )
+
+
             if not network.isActive():
                 network.create()
 
+
             output(
                 {
-                    "status": "exists",
+                    "status":
+                        "exists",
+
                     "network":
                         network_name,
+
                     "bridge":
-                        network.bridgeName(),
+                        actual_bridge,
+
                     "active":
                         bool(
                             network.isActive()
                         ),
+
                     "persistent":
                         bool(
                             network.isPersistent()
@@ -132,9 +283,6 @@ def network_ensure(
             )
 
             return
-
-        except libvirt.libvirtError:
-            pass
 
 
         xml = f"""
@@ -171,19 +319,457 @@ def network_ensure(
 
         output(
             {
-                "status": "created",
+                "status":
+                    "created",
+
                 "network":
                     network_name,
+
                 "bridge":
                     network.bridgeName(),
-                "active": True,
-                "persistent": True,
-                "autostart": False,
+
+                "active":
+                    True,
+
+                "persistent":
+                    True,
+
+                "autostart":
+                    False,
             }
         )
 
     finally:
         conn.close()
+
+
+def image_ensure(
+    vendor,
+    image_id,
+):
+    require_root()
+
+    validate_id(
+        vendor,
+        "Vendor",
+    )
+
+    validate_id(
+        image_id,
+        "Image ID",
+    )
+
+
+    source = (
+        PROJECT_IMAGE_STORE
+        / vendor
+        / image_id
+        / "base.qcow2"
+    )
+
+    destination_dir = (
+        RUNTIME_IMAGE_STORE
+        / vendor
+        / image_id
+    )
+
+    destination = (
+        destination_dir
+        / "base.qcow2"
+    )
+
+
+    if not source.is_file():
+        fail(
+            "Imagem de origem nao "
+            f"encontrada: {source}"
+        )
+
+
+    info = qemu_img_info(
+        source
+    )
+
+    if (
+        info.get("format")
+        != "qcow2"
+    ):
+        fail(
+            "Imagem de origem nao "
+            "e QCOW2 valida."
+        )
+
+
+    source_sha = (
+        sha256_file(
+            source
+        )
+    )
+
+
+    ensure_runtime_dir(
+        RUNTIME_ROOT
+    )
+
+    ensure_runtime_dir(
+        RUNTIME_IMAGE_STORE
+    )
+
+    ensure_runtime_dir(
+        RUNTIME_IMAGE_STORE
+        / vendor
+    )
+
+    ensure_runtime_dir(
+        destination_dir
+    )
+
+
+    if destination.exists():
+        runtime_sha = (
+            sha256_file(
+                destination
+            )
+        )
+
+        if (
+            runtime_sha
+            != source_sha
+        ):
+            fail(
+                "Imagem runtime ja "
+                "existe com SHA256 "
+                "diferente."
+            )
+
+
+        shutil.chown(
+            destination,
+            user="libvirt-qemu",
+            group="kvm",
+        )
+
+        os.chmod(
+            destination,
+            0o444,
+        )
+
+
+        output(
+            {
+                "status":
+                    "exists",
+
+                "vendor":
+                    vendor,
+
+                "image_id":
+                    image_id,
+
+                "runtime_path":
+                    str(destination),
+
+                "sha256":
+                    runtime_sha,
+
+                "read_only":
+                    True,
+            }
+        )
+
+        return
+
+
+    temp_file = (
+        destination_dir
+        / ".base.qcow2.tmp"
+    )
+
+
+    try:
+        if temp_file.exists():
+            temp_file.unlink()
+
+
+        shutil.copyfile(
+            source,
+            temp_file,
+        )
+
+
+        copied_sha = (
+            sha256_file(
+                temp_file
+            )
+        )
+
+        if (
+            copied_sha
+            != source_sha
+        ):
+            fail(
+                "SHA256 divergiu "
+                "durante a copia."
+            )
+
+
+        shutil.chown(
+            temp_file,
+            user="libvirt-qemu",
+            group="kvm",
+        )
+
+        os.chmod(
+            temp_file,
+            0o444,
+        )
+
+
+        os.replace(
+            temp_file,
+            destination,
+        )
+
+    finally:
+        if temp_file.exists():
+            temp_file.unlink()
+
+
+    output(
+        {
+            "status":
+                "created",
+
+            "vendor":
+                vendor,
+
+            "image_id":
+                image_id,
+
+            "runtime_path":
+                str(destination),
+
+            "sha256":
+                source_sha,
+
+            "read_only":
+                True,
+        }
+    )
+
+
+def overlay_ensure(
+    lab_id,
+    domain_name,
+    vendor,
+    image_id,
+):
+    require_root()
+
+    validate_id(
+        lab_id,
+        "Lab ID",
+    )
+
+    validate_id(
+        vendor,
+        "Vendor",
+    )
+
+    validate_id(
+        image_id,
+        "Image ID",
+    )
+
+
+    if not DOMAIN_RE.fullmatch(
+        domain_name
+    ):
+        fail(
+            "Nome de dominio "
+            f"invalido: {domain_name}"
+        )
+
+
+    base = (
+        RUNTIME_IMAGE_STORE
+        / vendor
+        / image_id
+        / "base.qcow2"
+    )
+
+
+    if not base.is_file():
+        fail(
+            "Base runtime nao existe. "
+            "Execute image-ensure "
+            "primeiro."
+        )
+
+
+    lab_dir = (
+        RUNTIME_LABS
+        / lab_id
+    )
+
+    overlay = (
+        lab_dir
+        / f"{domain_name}.qcow2"
+    )
+
+
+    ensure_runtime_dir(
+        RUNTIME_ROOT
+    )
+
+    ensure_runtime_dir(
+        RUNTIME_LABS
+    )
+
+    ensure_runtime_dir(
+        lab_dir
+    )
+
+
+    if overlay.exists():
+        info = qemu_img_info(
+            overlay
+        )
+
+
+        if (
+            info.get("format")
+            != "qcow2"
+        ):
+            fail(
+                "Overlay existente "
+                "nao e QCOW2."
+            )
+
+
+        backing = (
+            info.get(
+                "full-backing-filename"
+            )
+            or
+            info.get(
+                "backing-filename"
+            )
+        )
+
+
+        if not backing:
+            fail(
+                "Overlay existente "
+                "nao possui backing "
+                "file."
+            )
+
+
+        backing_path = Path(
+            backing
+        )
+
+        if not backing_path.is_absolute():
+            backing_path = (
+                overlay.parent
+                / backing_path
+            )
+
+
+        if (
+            backing_path.resolve()
+            != base.resolve()
+        ):
+            fail(
+                "Overlay existente "
+                "aponta para backing "
+                "file diferente."
+            )
+
+
+        shutil.chown(
+            overlay,
+            user="libvirt-qemu",
+            group="kvm",
+        )
+
+        os.chmod(
+            overlay,
+            0o644,
+        )
+
+
+        output(
+            {
+                "status":
+                    "exists",
+
+                "domain":
+                    domain_name,
+
+                "overlay":
+                    str(overlay),
+
+                "backing":
+                    str(base),
+
+                "format":
+                    "qcow2",
+            }
+        )
+
+        return
+
+
+    subprocess.run(
+        [
+            "qemu-img",
+            "create",
+            "-f",
+            "qcow2",
+            "-F",
+            "qcow2",
+            "-b",
+            str(base),
+            str(overlay),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+    shutil.chown(
+        overlay,
+        user="libvirt-qemu",
+        group="kvm",
+    )
+
+    os.chmod(
+        overlay,
+        0o644,
+    )
+
+
+    output(
+        {
+            "status":
+                "created",
+
+            "domain":
+                domain_name,
+
+            "overlay":
+                str(overlay),
+
+            "backing":
+                str(base),
+
+            "format":
+                "qcow2",
+        }
+    )
 
 
 def main():
@@ -203,7 +789,6 @@ def main():
             )
 
         health()
-
         return
 
 
@@ -222,6 +807,39 @@ def main():
         return
 
 
+    if command == "image-ensure":
+        if len(sys.argv) != 4:
+            fail(
+                "Uso: image-ensure "
+                "<vendor> <image-id>"
+            )
+
+        image_ensure(
+            sys.argv[2],
+            sys.argv[3],
+        )
+
+        return
+
+
+    if command == "overlay-ensure":
+        if len(sys.argv) != 6:
+            fail(
+                "Uso: overlay-ensure "
+                "<lab-id> <domain> "
+                "<vendor> <image-id>"
+            )
+
+        overlay_ensure(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+        )
+
+        return
+
+
     fail(
         f"Comando desconhecido: "
         f"{command}"
@@ -229,4 +847,27 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+
+    except SystemExit:
+        raise
+
+    except subprocess.CalledProcessError as error:
+        message = (
+            error.stderr.strip()
+            or
+            error.stdout.strip()
+            or
+            str(error)
+        )
+
+        fail(
+            "Comando externo falhou: "
+            f"{message}"
+        )
+
+    except Exception as error:
+        fail(
+            f"Erro interno: {error}"
+        )
