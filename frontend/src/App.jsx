@@ -6,6 +6,7 @@ import {
 
 import {
   Background,
+  ConnectionMode,
   Controls,
   MiniMap,
   ReactFlow,
@@ -16,6 +17,7 @@ import {
 import DevicePalette from './components/DevicePalette'
 import NodePropertiesPanel from './components/NodePropertiesPanel'
 import ImageImportModal from './components/ImageImportModal'
+import PlannedDeviceNode from './components/PlannedDeviceNode'
 
 import '@xyflow/react/dist/style.css'
 import './App.css'
@@ -61,6 +63,11 @@ const DEFAULT_POSITIONS = {
     x: 685,
     y: 540,
   },
+}
+
+
+const NODE_TYPES = {
+  plannedDevice: PlannedDeviceNode,
 }
 
 
@@ -132,34 +139,43 @@ function createPlannedNode(
   }
 
 
+  const interfaceCount =
+    desiredNode.properties?.interfaces ??
+    device?.defaults?.interfaces ??
+    device?.interfaces?.default ??
+    1
+
+
   return {
     id: desiredNode.id,
+
+    type: 'plannedDevice',
 
     position:
       position ||
       fallbackPosition,
 
     data: {
-      label: (
-        <div className="node-content">
-          <div className="node-planned-state">
-            PLANNED
-          </div>
+      name:
+        desiredNode.name,
 
-          <strong>
-            {desiredNode.name}
-          </strong>
+      templateName:
+        device?.name ||
+        desiredNode.template_id,
 
-          <span>
-            {device?.name ||
-              desiredNode.template_id}
-          </span>
-        </div>
-      ),
+      kind:
+        device?.kind ||
+        'vm',
+
+      runtime:
+        device?.runtime,
+
+      interfaceCount,
+
+      interfacePrefix:
+        device?.interfaces?.prefix ||
+        'nic',
     },
-
-    className:
-      'lab-node lab-node-planned',
   }
 }
 
@@ -183,6 +199,40 @@ function createEdge(link) {
       link.target === 'net:UNDERLAY'
         ? 'underlay-edge'
         : '',
+  }
+}
+
+
+function createPlannedEdge(link) {
+  const visiblePorts = [
+    link.source_port,
+    link.target_port,
+  ].filter(
+    (port) =>
+      port &&
+      !port.startsWith('network-')
+  )
+
+
+  return {
+    id: link.id,
+
+    source: link.source,
+    target: link.target,
+
+    sourceHandle:
+      link.source_port || null,
+
+    targetHandle:
+      link.target_port || null,
+
+    type: 'smoothstep',
+
+    label:
+      visiblePorts.join(' ↔ '),
+
+    className:
+      'planned-edge',
   }
 }
 
@@ -409,11 +459,15 @@ function App() {
           ...plannedNodes,
         ])
 
-        setEdges(
-          topology.links.map(
+        setEdges([
+          ...topology.links.map(
             createEdge
-          )
-        )
+          ),
+
+          ...(desired.links || []).map(
+            createPlannedEdge
+          ),
+        ])
       } catch (err) {
         setError(err.message)
       } finally {
@@ -684,6 +738,15 @@ function App() {
             updatedNodes
           )
 
+          setEdges(
+            (currentEdges) =>
+              currentEdges.filter(
+                (edge) =>
+                  edge.source !== nodeId &&
+                  edge.target !== nodeId
+              )
+          )
+
           setSelectedDesiredNodeId(
             null
           )
@@ -949,6 +1012,286 @@ function App() {
     )
 
 
+  const onConnect =
+    useCallback(
+      async (connection) => {
+        if (
+          !connection.source ||
+          !connection.target ||
+          !connection.sourceHandle ||
+          !connection.targetHandle
+        ) {
+          return
+        }
+
+
+        if (
+          connection.source ===
+          connection.target
+        ) {
+          setSaveStatus(
+            'Nao e permitido conectar o node nele mesmo'
+          )
+
+          return
+        }
+
+
+        const desiredNodes =
+          desiredTopology.nodes || []
+
+        const desiredLinks =
+          desiredTopology.links || []
+
+
+        const getDeviceForNode =
+          (nodeId) => {
+            const desiredNode =
+              desiredNodes.find(
+                (node) =>
+                  node.id === nodeId
+              )
+
+            if (!desiredNode) {
+              return null
+            }
+
+            return (
+              catalogDevices.find(
+                (device) =>
+                  device.id ===
+                  desiredNode.template_id
+              ) || null
+            )
+          }
+
+
+        const sourceDevice =
+          getDeviceForNode(
+            connection.source
+          )
+
+        const targetDevice =
+          getDeviceForNode(
+            connection.target
+          )
+
+
+        if (
+          !sourceDevice ||
+          !targetDevice
+        ) {
+          setSaveStatus(
+            'Por enquanto conecte somente devices PLANNED'
+          )
+
+          return
+        }
+
+
+        const sharedKinds = [
+          'network',
+          'cloud',
+        ]
+
+
+        const handleIsUsed =
+          (nodeId, handleId) =>
+            desiredLinks.some(
+              (link) =>
+                (
+                  link.source === nodeId &&
+                  link.source_port === handleId
+                ) ||
+                (
+                  link.target === nodeId &&
+                  link.target_port === handleId
+                )
+            )
+
+
+        if (
+          !sharedKinds.includes(
+            sourceDevice.kind
+          ) &&
+          handleIsUsed(
+            connection.source,
+            connection.sourceHandle,
+          )
+        ) {
+          setSaveStatus(
+            'Porta de origem ja esta conectada'
+          )
+
+          return
+        }
+
+
+        if (
+          !sharedKinds.includes(
+            targetDevice.kind
+          ) &&
+          handleIsUsed(
+            connection.target,
+            connection.targetHandle,
+          )
+        ) {
+          setSaveStatus(
+            'Porta de destino ja esta conectada'
+          )
+
+          return
+        }
+
+
+        const newLink = {
+          id:
+            `planned-link:${crypto.randomUUID()}`,
+
+          source:
+            connection.source,
+
+          target:
+            connection.target,
+
+          source_port:
+            connection.sourceHandle,
+
+          target_port:
+            connection.targetHandle,
+
+          properties: {},
+        }
+
+
+        const updatedDesired = {
+          ...desiredTopology,
+
+          links: [
+            ...desiredLinks,
+            newLink,
+          ],
+        }
+
+
+        setSaveStatus(
+          'Salvando conexao...'
+        )
+
+
+        try {
+          await saveDesiredTopology(
+            updatedDesired
+          )
+
+          setDesiredTopology(
+            updatedDesired
+          )
+
+          setEdges(
+            (currentEdges) => [
+              ...currentEdges,
+              createPlannedEdge(
+                newLink
+              ),
+            ]
+          )
+
+          setSaveStatus(
+            'Conexao salva'
+          )
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1500,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao salvar conexao'
+          )
+        }
+      },
+      [
+        desiredTopology,
+        catalogDevices,
+        saveDesiredTopology,
+        setEdges,
+      ]
+    )
+
+
+  const onEdgeDoubleClick =
+    useCallback(
+      async (_event, edge) => {
+        const exists =
+          (desiredTopology.links || [])
+            .some(
+              (link) =>
+                link.id === edge.id
+            )
+
+        if (!exists) {
+          return
+        }
+
+
+        const updatedDesired = {
+          ...desiredTopology,
+
+          links:
+            (desiredTopology.links || [])
+              .filter(
+                (link) =>
+                  link.id !== edge.id
+              ),
+        }
+
+
+        try {
+          await saveDesiredTopology(
+            updatedDesired
+          )
+
+          setDesiredTopology(
+            updatedDesired
+          )
+
+          setEdges(
+            (currentEdges) =>
+              currentEdges.filter(
+                (item) =>
+                  item.id !== edge.id
+              )
+          )
+
+          setSaveStatus(
+            'Conexao removida'
+          )
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1500,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao remover conexao'
+          )
+        }
+      },
+      [
+        desiredTopology,
+        saveDesiredTopology,
+        setEdges,
+      ]
+    )
+
+
   const refreshImageLibrary =
     useCallback(
       async () => {
@@ -1038,6 +1381,22 @@ function App() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
+
+            nodeTypes={
+              NODE_TYPES
+            }
+
+            connectionMode={
+              ConnectionMode.Loose
+            }
+
+            onConnect={
+              onConnect
+            }
+
+            onEdgeDoubleClick={
+              onEdgeDoubleClick
+            }
 
             onInit={
               setReactFlowInstance

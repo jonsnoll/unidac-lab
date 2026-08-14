@@ -1,0 +1,112 @@
+.planned-device-node {
+  min-width: 165px;
+
+  padding: 12px;
+
+  position: relative;
+
+  border: 2px dashed #b7862f;
+  border-top: 4px solid #b7862f;
+  border-radius: 8px;
+
+  background: #fffdf8;
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.05);
+}
+
+.planned-device-state {
+  margin-bottom: 4px;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 1px;
+
+  color: #9a6e1f;
+}
+
+.planned-device-name {
+  display: block;
+
+  font-size: 13px;
+}
+
+.planned-device-template {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 10px;
+
+  color: #777d82;
+}
+
+.planned-port-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  margin-top: 10px;
+
+  border-top: 1px solid #eee4cf;
+
+  padding-top: 8px;
+}
+
+.planned-port {
+  min-height: 22px;
+
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  padding-right: 8px;
+}
+
+.planned-port span {
+  font-size: 9px;
+  font-weight: 600;
+
+  color: #646b70;
+}
+
+.planned-handle {
+  width: 10px !important;
+  height: 10px !important;
+
+  border: 2px solid #ffffff !important;
+
+  background: #b7862f !important;
+}
+
+.planned-port-handle {
+  right: -18px !important;
+
+  top: 50% !important;
+
+  transform:
+    translateY(-50%) !important;
+}
+
+.planned-network-label {
+  margin-top: 10px;
+
+  padding-top: 7px;
+
+  border-top: 1px solid #eee4cf;
+
+  font-size: 9px;
+  text-align: center;
+
+  color: #777d82;
+}
+
+.planned-edge .react-flow__edge-path {
+  stroke: #b7862f;
+  stroke-width: 2;
+  stroke-dasharray: 7 5;
+}
