@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react'
 
 import DevicePalette from './components/DevicePalette'
+import NodePropertiesPanel from './components/NodePropertiesPanel'
 
 import '@xyflow/react/dist/style.css'
 import './App.css'
@@ -234,6 +235,12 @@ function App() {
     nodes: [],
     links: [],
   })
+
+
+  const [
+    selectedDesiredNodeId,
+    setSelectedDesiredNodeId,
+  ] = useState(null)
 
 
   const [labInfo, setLabInfo] =
@@ -470,6 +477,215 @@ function App() {
     )
 
 
+  const selectedDesiredNode =
+    desiredTopology.nodes?.find(
+      (node) =>
+        node.id ===
+        selectedDesiredNodeId
+    ) || null
+
+
+  const selectedDevice =
+    catalogDevices.find(
+      (device) =>
+        device.id ===
+        selectedDesiredNode?.template_id
+    ) || null
+
+
+  const onNodeClick =
+    useCallback(
+      (_event, node) => {
+        if (
+          node.id.startsWith(
+            'planned:'
+          )
+        ) {
+          setSelectedDesiredNodeId(
+            node.id
+          )
+
+          return
+        }
+
+        setSelectedDesiredNodeId(
+          null
+        )
+      },
+      []
+    )
+
+
+  const updateDesiredNode =
+    useCallback(
+      async (updatedNode) => {
+        const updatedDesired = {
+          ...desiredTopology,
+
+          nodes:
+            desiredTopology.nodes.map(
+              (node) =>
+                node.id ===
+                updatedNode.id
+                  ? updatedNode
+                  : node
+            ),
+        }
+
+
+        setSaveStatus(
+          'Salvando propriedades...'
+        )
+
+
+        try {
+          await saveDesiredTopology(
+            updatedDesired
+          )
+
+          setDesiredTopology(
+            updatedDesired
+          )
+
+
+          const device =
+            catalogDevices.find(
+              (item) =>
+                item.id ===
+                updatedNode.template_id
+            )
+
+
+          setNodes(
+            (currentNodes) =>
+              currentNodes.map(
+                (flowNode) => {
+                  if (
+                    flowNode.id !==
+                    updatedNode.id
+                  ) {
+                    return flowNode
+                  }
+
+                  return createPlannedNode(
+                    updatedNode,
+                    device,
+                    0,
+                    flowNode.position,
+                  )
+                }
+              )
+          )
+
+
+          setSaveStatus(
+            'Propriedades salvas'
+          )
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1600,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao salvar propriedades'
+          )
+        }
+      },
+      [
+        desiredTopology,
+        catalogDevices,
+        saveDesiredTopology,
+        setNodes,
+      ]
+    )
+
+
+  const deleteDesiredNode =
+    useCallback(
+      async (nodeId) => {
+        const updatedDesired = {
+          ...desiredTopology,
+
+          nodes:
+            desiredTopology.nodes.filter(
+              (node) =>
+                node.id !== nodeId
+            ),
+
+          links:
+            (desiredTopology.links || [])
+              .filter(
+                (link) =>
+                  link.source !== nodeId &&
+                  link.target !== nodeId
+              ),
+        }
+
+
+        const updatedNodes =
+          nodes.filter(
+            (node) =>
+              node.id !== nodeId
+          )
+
+
+        setSaveStatus(
+          'Removendo device...'
+        )
+
+
+        try {
+          await saveDesiredTopology(
+            updatedDesired
+          )
+
+          await saveLayout(
+            updatedNodes
+          )
+
+          setDesiredTopology(
+            updatedDesired
+          )
+
+          setNodes(
+            updatedNodes
+          )
+
+          setSelectedDesiredNodeId(
+            null
+          )
+
+          setSaveStatus(
+            'Device removido'
+          )
+
+          window.setTimeout(
+            () =>
+              setSaveStatus(''),
+            1500,
+          )
+        } catch (err) {
+          console.error(err)
+
+          setSaveStatus(
+            'Erro ao remover device'
+          )
+        }
+      },
+      [
+        desiredTopology,
+        nodes,
+        saveDesiredTopology,
+        saveLayout,
+        setNodes,
+      ]
+    )
+
+
   const onNodeDragStop =
     useCallback(
       async (
@@ -669,6 +885,10 @@ function App() {
             updatedNodes
           )
 
+          setSelectedDesiredNodeId(
+            nodeId
+          )
+
 
           setSaveStatus(
             'Device planejado salvo'
@@ -775,6 +995,10 @@ function App() {
               onNodeDragStop
             }
 
+            onNodeClick={
+              onNodeClick
+            }
+
             onDragOver={
               onDragOver
             }
@@ -802,6 +1026,33 @@ function App() {
             <Controls />
           </ReactFlow>
         </main>
+
+
+        {selectedDesiredNode && (
+          <NodePropertiesPanel
+            node={
+              selectedDesiredNode
+            }
+
+            device={
+              selectedDevice
+            }
+
+            onClose={() =>
+              setSelectedDesiredNodeId(
+                null
+              )
+            }
+
+            onSave={
+              updateDesiredNode
+            }
+
+            onDelete={
+              deleteDesiredNode
+            }
+          />
+        )}
       </div>
     </div>
   )
