@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import libvirt
@@ -772,6 +773,921 @@ def overlay_ensure(
     )
 
 
+def validate_managed_network(network_name):
+    if network_name == "default":
+        return
+
+    if NETWORK_RE.fullmatch(
+        network_name
+    ):
+        return
+
+    fail(
+        "Rede nao permitida pelo Agent: "
+        f"{network_name}"
+    )
+
+
+def domain_mac(
+    domain_name,
+    interface_index,
+):
+    match = re.search(
+        r"-([a-f0-9]{4})$",
+        domain_name,
+    )
+
+    if not match:
+        fail(
+            "Dominio nao possui token "
+            "hexadecimal para gerar MAC."
+        )
+
+    token = match.group(1)
+
+    return (
+        "52:54:00:"
+        f"{token[:2]}:"
+        f"{token[2:]}:"
+        f"{interface_index:02x}"
+    )
+
+
+def expected_overlay_path(
+    lab_id,
+    domain_name,
+):
+    return (
+        RUNTIME_LABS
+        / lab_id
+        / f"{domain_name}.qcow2"
+    )
+
+
+def resolve_vm_interfaces(
+    interfaces,
+):
+    if not isinstance(
+        interfaces,
+        list,
+    ):
+        fail(
+            "interfaces precisa ser uma lista."
+        )
+
+    if not interfaces:
+        fail(
+            "A VM precisa possuir "
+            "ao menos uma interface."
+        )
+
+
+    connected_networks = []
+
+    for item in interfaces:
+        if not isinstance(
+            item,
+            dict,
+        ):
+            fail(
+                "Interface invalida."
+            )
+
+        port = item.get(
+            "port"
+        )
+
+        if (
+            not isinstance(port, str)
+            or
+            not re.fullmatch(
+                r"[A-Za-z0-9_.-]{1,32}",
+                port,
+            )
+        ):
+            fail(
+                "Nome de porta invalido."
+            )
+
+        connected = bool(
+            item.get("connected")
+        )
+
+        network = item.get(
+            "network"
+        )
+
+        if connected:
+            if not network:
+                fail(
+                    f"{port}: conectado "
+                    "sem network."
+                )
+
+            validate_managed_network(
+                network
+            )
+
+            connected_networks.append(
+                network
+            )
+
+
+    fallback_network = next(
+        (
+            network
+            for network
+            in connected_networks
+            if network != "default"
+        ),
+        (
+            connected_networks[0]
+            if connected_networks
+            else "default"
+        ),
+    )
+
+
+    resolved = []
+
+    for index, item in enumerate(
+        interfaces,
+        start=1,
+    ):
+        connected = bool(
+            item.get("connected")
+        )
+
+        network = item.get(
+            "network"
+        )
+
+        if not connected:
+            network = (
+                network
+                or fallback_network
+            )
+
+        validate_managed_network(
+            network
+        )
+
+        resolved.append(
+            {
+                "port":
+                    item["port"],
+
+                "connected":
+                    connected,
+
+                "network":
+                    network,
+
+                "index":
+                    index,
+            }
+        )
+
+    return resolved
+
+
+def validate_overlay_for_vm(
+    overlay,
+    vendor,
+    image_id,
+):
+    if not overlay.is_file():
+        fail(
+            "Overlay nao existe. "
+            "Execute overlay-ensure primeiro."
+        )
+
+
+    base = (
+        RUNTIME_IMAGE_STORE
+        / vendor
+        / image_id
+        / "base.qcow2"
+    )
+
+    if not base.is_file():
+        fail(
+            "Imagem base runtime nao existe."
+        )
+
+
+    info = qemu_img_info(
+        overlay
+    )
+
+
+    if info.get("format") != "qcow2":
+        fail(
+            "Overlay nao e QCOW2."
+        )
+
+
+    backing = (
+        info.get(
+            "full-backing-filename"
+        )
+        or
+        info.get(
+            "backing-filename"
+        )
+    )
+
+
+    if not backing:
+        fail(
+            "Overlay nao possui backing file."
+        )
+
+
+    backing_path = Path(
+        backing
+    )
+
+    if not backing_path.is_absolute():
+        backing_path = (
+            overlay.parent
+            / backing_path
+        )
+
+
+    if (
+        backing_path.resolve()
+        != base.resolve()
+    ):
+        fail(
+            "Overlay aponta para "
+            "imagem base diferente."
+        )
+
+
+def build_fortigate_xml(
+    domain_name,
+    memory_mb,
+    vcpu,
+    overlay,
+    interfaces,
+):
+    interface_xml = []
+
+
+    for item in interfaces:
+        mac = domain_mac(
+            domain_name,
+            item["index"],
+        )
+
+        link = ""
+
+        if not item["connected"]:
+            link = (
+                "\n"
+                "      <link state='down'/>"
+            )
+
+
+        interface_xml.append(
+            f"""
+    <interface type='network'>
+      <mac address='{mac}'/>
+      <source network='{item["network"]}'/>
+      <model type='virtio'/>{link}
+    </interface>
+""".rstrip()
+        )
+
+
+    memory_kib = (
+        memory_mb * 1024
+    )
+
+    interface_block = (
+        "\n\n".join(
+            interface_xml
+        )
+    )
+
+
+    return f"""
+<domain type='kvm'>
+  <name>{domain_name}</name>
+
+  <memory unit='KiB'>{memory_kib}</memory>
+  <currentMemory unit='KiB'>{memory_kib}</currentMemory>
+
+  <vcpu placement='static'>{vcpu}</vcpu>
+
+  <os>
+    <type arch='x86_64'
+          machine='pc-i440fx-noble-v2'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+
+  <cpu mode='host-passthrough'
+       check='none'
+       migratable='on'/>
+
+  <devices>
+
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='{overlay}'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+
+{interface_block}
+
+    <serial type='pty'>
+      <target type='isa-serial'
+              port='0'/>
+    </serial>
+
+    <console type='pty'>
+      <target type='serial'
+              port='0'/>
+    </console>
+
+  </devices>
+</domain>
+""".strip()
+
+
+def validate_existing_vm(
+    domain,
+    domain_name,
+    memory_mb,
+    vcpu,
+    overlay,
+    interfaces,
+):
+    root = ET.fromstring(
+        domain.XMLDesc(0)
+    )
+
+    mismatches = []
+
+
+    os_type = root.find(
+        "./os/type"
+    )
+
+    machine = (
+        os_type.get("machine")
+        if os_type is not None
+        else None
+    )
+
+    if machine != "pc-i440fx-noble-v2":
+        mismatches.append(
+            "machine diferente"
+        )
+
+
+    try:
+        actual_vcpu = int(
+            root.findtext("vcpu")
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        actual_vcpu = None
+
+
+    if actual_vcpu != vcpu:
+        mismatches.append(
+            "vCPU diferente"
+        )
+
+
+    memory = root.find(
+        "memory"
+    )
+
+    actual_memory = None
+
+    if memory is not None:
+        try:
+            actual_memory = int(
+                memory.text
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            pass
+
+
+        unit = (
+            memory.get(
+                "unit",
+                "KiB",
+            ).lower()
+        )
+
+
+        if (
+            actual_memory is not None
+            and unit == "mib"
+        ):
+            actual_memory *= 1024
+
+
+    expected_memory = (
+        memory_mb * 1024
+    )
+
+
+    if actual_memory != expected_memory:
+        mismatches.append(
+            "memoria diferente"
+        )
+
+
+    disk_source = None
+
+    for disk in root.findall(
+        "./devices/disk"
+    ):
+        if disk.get("device") != "disk":
+            continue
+
+        source = disk.find(
+            "source"
+        )
+
+        if source is not None:
+            disk_source = source.get(
+                "file"
+            )
+
+        break
+
+
+    if disk_source != str(overlay):
+        mismatches.append(
+            "disco diferente"
+        )
+
+
+    actual_interfaces = root.findall(
+        "./devices/interface"
+    )
+
+
+    if (
+        len(actual_interfaces)
+        != len(interfaces)
+    ):
+        mismatches.append(
+            "quantidade de interfaces diferente"
+        )
+
+    else:
+        for index, (
+            actual,
+            expected,
+        ) in enumerate(
+            zip(
+                actual_interfaces,
+                interfaces,
+            ),
+            start=1,
+        ):
+            source = actual.find(
+                "source"
+            )
+
+            actual_network = (
+                source.get("network")
+                if source is not None
+                else None
+            )
+
+
+            if (
+                actual_network
+                != expected["network"]
+            ):
+                mismatches.append(
+                    f"interface {index} "
+                    "em rede diferente"
+                )
+
+
+            model = actual.find(
+                "model"
+            )
+
+            actual_model = (
+                model.get("type")
+                if model is not None
+                else None
+            )
+
+            if actual_model != "virtio":
+                mismatches.append(
+                    f"interface {index} "
+                    "nao usa virtio"
+                )
+
+
+            mac = actual.find(
+                "mac"
+            )
+
+            actual_mac = (
+                mac.get("address")
+                if mac is not None
+                else None
+            )
+
+
+            expected_mac = domain_mac(
+                domain_name,
+                index,
+            )
+
+
+            if (
+                actual_mac.lower()
+                if actual_mac
+                else None
+            ) != expected_mac:
+                mismatches.append(
+                    f"interface {index} "
+                    "possui MAC diferente"
+                )
+
+
+            link = actual.find(
+                "link"
+            )
+
+            actual_down = (
+                link is not None
+                and
+                link.get("state")
+                == "down"
+            )
+
+            expected_down = (
+                not expected[
+                    "connected"
+                ]
+            )
+
+
+            if (
+                actual_down
+                != expected_down
+            ):
+                mismatches.append(
+                    f"interface {index} "
+                    "possui link diferente"
+                )
+
+
+    if mismatches:
+        fail(
+            "VM existente diverge do "
+            "Desired State: "
+            + "; ".join(
+                mismatches
+            )
+        )
+
+
+def vm_ensure():
+    require_root()
+
+
+    try:
+        spec = json.load(
+            sys.stdin
+        )
+
+    except json.JSONDecodeError as error:
+        fail(
+            "JSON invalido para vm-ensure: "
+            f"{error}"
+        )
+
+
+    if not isinstance(
+        spec,
+        dict,
+    ):
+        fail(
+            "Spec precisa ser objeto JSON."
+        )
+
+
+    lab_id = spec.get(
+        "lab_id"
+    )
+
+    domain_name = spec.get(
+        "domain_name"
+    )
+
+    profile = spec.get(
+        "profile"
+    )
+
+    vendor = spec.get(
+        "vendor"
+    )
+
+    image_id = spec.get(
+        "image_id"
+    )
+
+
+    validate_id(
+        lab_id,
+        "Lab ID",
+    )
+
+    validate_id(
+        vendor,
+        "Vendor",
+    )
+
+    validate_id(
+        image_id,
+        "Image ID",
+    )
+
+
+    if not DOMAIN_RE.fullmatch(
+        domain_name or ""
+    ):
+        fail(
+            "Nome de dominio invalido."
+        )
+
+
+    if profile != "fortigate-kvm":
+        fail(
+            "Perfil ainda nao suportado: "
+            f"{profile}"
+        )
+
+
+    try:
+        vcpu = int(
+            spec.get("vcpu")
+        )
+
+        memory_mb = int(
+            spec.get("memory_mb")
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        fail(
+            "CPU ou memoria invalidos."
+        )
+
+
+    if not 1 <= vcpu <= 64:
+        fail(
+            "vCPU fora do limite."
+        )
+
+
+    if not 256 <= memory_mb <= 131072:
+        fail(
+            "Memoria fora do limite."
+        )
+
+
+    interfaces = resolve_vm_interfaces(
+        spec.get("interfaces")
+    )
+
+
+    overlay = expected_overlay_path(
+        lab_id,
+        domain_name,
+    )
+
+
+    validate_overlay_for_vm(
+        overlay,
+        vendor,
+        image_id,
+    )
+
+
+    conn = get_connection()
+
+
+    try:
+        for network_name in {
+            item["network"]
+            for item in interfaces
+        }:
+            try:
+                network = (
+                    conn.networkLookupByName(
+                        network_name
+                    )
+                )
+
+            except libvirt.libvirtError:
+                fail(
+                    "Rede necessaria nao existe: "
+                    f"{network_name}"
+                )
+
+
+            if not network.isActive():
+                fail(
+                    "Rede necessaria esta inativa: "
+                    f"{network_name}"
+                )
+
+
+        try:
+            domain = conn.lookupByName(
+                domain_name
+            )
+
+        except libvirt.libvirtError:
+            domain = None
+
+
+        if domain is not None:
+            validate_existing_vm(
+                domain,
+                domain_name,
+                memory_mb,
+                vcpu,
+                overlay,
+                interfaces,
+            )
+
+
+            started = False
+
+
+            if not domain.isActive():
+                domain.create()
+
+                started = True
+
+
+            output(
+                {
+                    "status":
+                        "exists",
+
+                    "domain":
+                        domain_name,
+
+                    "state":
+                        "running"
+                        if domain.isActive()
+                        else "shutoff",
+
+                    "started":
+                        started,
+
+                    "overlay":
+                        str(overlay),
+
+                    "vcpu":
+                        vcpu,
+
+                    "memory_mb":
+                        memory_mb,
+
+                    "interfaces":
+                        [
+                            {
+                                "port":
+                                    item["port"],
+
+                                "network":
+                                    item["network"],
+
+                                "connected":
+                                    item["connected"],
+
+                                "mac":
+                                    domain_mac(
+                                        domain_name,
+                                        item["index"],
+                                    ),
+                            }
+                            for item
+                            in interfaces
+                        ],
+                }
+            )
+
+            return
+
+
+        xml = build_fortigate_xml(
+            domain_name,
+            memory_mb,
+            vcpu,
+            overlay,
+            interfaces,
+        )
+
+
+        domain = conn.defineXML(
+            xml
+        )
+
+
+        if domain is None:
+            fail(
+                "Falha ao definir dominio."
+            )
+
+
+        try:
+            domain.create()
+
+        except Exception:
+            try:
+                domain.undefine()
+
+            except Exception:
+                pass
+
+            raise
+
+
+        output(
+            {
+                "status":
+                    "created",
+
+                "domain":
+                    domain_name,
+
+                "state":
+                    "running",
+
+                "started":
+                    True,
+
+                "overlay":
+                    str(overlay),
+
+                "vcpu":
+                    vcpu,
+
+                "memory_mb":
+                    memory_mb,
+
+                "interfaces":
+                    [
+                        {
+                            "port":
+                                item["port"],
+
+                            "network":
+                                item["network"],
+
+                            "connected":
+                                item["connected"],
+
+                            "mac":
+                                domain_mac(
+                                    domain_name,
+                                    item["index"],
+                                ),
+                        }
+                        for item
+                        in interfaces
+                    ],
+            }
+        )
+
+    finally:
+        conn.close()
+
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -836,6 +1752,17 @@ def main():
             sys.argv[4],
             sys.argv[5],
         )
+
+        return
+
+
+    if command == "vm-ensure":
+        if len(sys.argv) != 2:
+            fail(
+                "Uso: vm-ensure < spec.json"
+            )
+
+        vm_ensure()
 
         return
 
