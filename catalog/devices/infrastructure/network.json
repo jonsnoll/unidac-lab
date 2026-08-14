@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "network",
+  "vendor": "unidac",
+  "name": "Network",
+  "category": "infrastructure",
+  "kind": "network",
+  "runtime": "network",
+  "driver": "linux-bridge",
+  "description": "Segmento Ethernet interno do laboratorio.",
+  "image_required": false,
+  "interfaces": {
+    "mode": "dynamic"
+  }
+}

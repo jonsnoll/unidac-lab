@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+.venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# VM images
+*.qcow2
+*.qcow
+*.img
+*.raw
+*.vmdk
+*.vdi
+*.ova
+*.ovf
+*.iso
+
+# Captures
+*.pcap
+*.pcapng
+captures/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime
+run/

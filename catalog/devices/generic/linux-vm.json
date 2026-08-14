@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "generic-linux-vm",
+  "vendor": "generic",
+  "name": "Linux VM",
+  "category": "endpoint",
+  "kind": "vm",
+  "runtime": "qemu",
+  "driver": "qemu-generic",
+  "description": "Maquina virtual Linux generica.",
+  "image_required": true,
+  "image_types": [
+    "qcow2",
+    "raw",
+    "iso"
+  ],
+  "defaults": {
+    "vcpu": 1,
+    "memory_mb": 1024,
+    "interfaces": 1
+  },
+  "virtualization": {
+    "nic_model": "virtio",
+    "disk_bus": "virtio"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cloud-nat",
+  "vendor": "unidac",
+  "name": "Internet / NAT",
+  "category": "infrastructure",
+  "kind": "cloud",
+  "runtime": "network",
+  "driver": "cloud-nat",
+  "description": "Conecta equipamentos do laboratorio a Internet utilizando NAT do host.",
+  "image_required": false,
+  "interfaces": {
+    "mode": "dynamic"
+  }
+}

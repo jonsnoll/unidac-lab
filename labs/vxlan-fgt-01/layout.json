@@ -1,0 +1,60 @@
+{
+  "nodes": [
+    {
+      "id": "host:HOST-A",
+      "position": {
+        "x": 145.0,
+        "y": 540.0
+      }
+    },
+    {
+      "id": "host:HOST-B",
+      "position": {
+        "x": 685.0,
+        "y": 540.0
+      }
+    },
+    {
+      "id": "net:LAN-DC-A",
+      "position": {
+        "x": 145.0,
+        "y": 370.0
+      }
+    },
+    {
+      "id": "net:LAN-DC-B",
+      "position": {
+        "x": 685.0,
+        "y": 370.0
+      }
+    },
+    {
+      "id": "net:UNDERLAY",
+      "position": {
+        "x": 400.0,
+        "y": 195.0
+      }
+    },
+    {
+      "id": "net:default",
+      "position": {
+        "x": 390.0,
+        "y": 20.0
+      }
+    },
+    {
+      "id": "vm:FGT-DC-A",
+      "position": {
+        "x": 144.73804687499998,
+        "y": 177.50390625
+      }
+    },
+    {
+      "id": "vm:FGT-DC-B",
+      "position": {
+        "x": 670.0,
+        "y": 180.0
+      }
+    }
+  ]
+}

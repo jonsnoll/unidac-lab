@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "fortinet-fortigate-vm",
+  "vendor": "fortinet",
+  "name": "FortiGate VM",
+  "category": "firewall",
+  "kind": "network-appliance",
+  "runtime": "qemu",
+  "driver": "qemu-generic",
+  "description": "Fortinet FortiGate virtual para laboratorios.",
+  "image_required": true,
+  "image_types": [
+    "qcow2"
+  ],
+  "defaults": {
+    "vcpu": 1,
+    "memory_mb": 2048,
+    "interfaces": 3
+  },
+  "interfaces": {
+    "prefix": "port",
+    "minimum": 1,
+    "default": 3
+  },
+  "virtualization": {
+    "nic_model": "virtio",
+    "disk_bus": "virtio"
+  },
+  "console": {
+    "type": "serial"
+  }
+}

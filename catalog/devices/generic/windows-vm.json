@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "generic-windows-vm",
+  "vendor": "generic",
+  "name": "Windows VM",
+  "category": "endpoint",
+  "kind": "vm",
+  "runtime": "qemu",
+  "driver": "qemu-generic",
+  "description": "Maquina virtual Windows generica.",
+  "image_required": true,
+  "image_types": [
+    "qcow2",
+    "raw",
+    "iso"
+  ],
+  "defaults": {
+    "vcpu": 2,
+    "memory_mb": 4096,
+    "interfaces": 1
+  },
+  "virtualization": {
+    "nic_model": "virtio",
+    "disk_bus": "virtio"
+  }
+}
