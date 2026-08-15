@@ -213,7 +213,10 @@ function createEdge(link) {
 }
 
 
-function createPlannedEdge(link) {
+function createPlannedEdge(
+  link,
+  reconciled = false,
+) {
   const visiblePorts = [
     link.source_port,
     link.target_port,
@@ -242,7 +245,13 @@ function createPlannedEdge(link) {
       visiblePorts.join(' ↔ '),
 
     className:
-      'planned-edge',
+      reconciled
+        ? 'planned-edge reconciled-edge'
+        : 'planned-edge',
+
+    data: {
+      reconciled,
+    },
   }
 }
 
@@ -595,6 +604,136 @@ function App() {
           )
 
 
+        /*
+         * Assinatura deterministica dos
+         * links VM -> Network observados
+         * no runtime.
+         *
+         * Exemplo:
+         *
+         * vm:ulab-fgt...|port1|net:default
+         */
+        const realVmNetworkLinks =
+          new Set(
+            (topology.links || [])
+              .filter(
+                (link) =>
+                  link.type ===
+                    'vm-network' &&
+                  link.source &&
+                  link.target &&
+                  link.source_port
+              )
+              .map(
+                (link) =>
+                  [
+                    link.source,
+                    link.source_port,
+                    link.target,
+                  ].join('|')
+              )
+          )
+
+
+        function isDesiredLinkReconciled(
+          link,
+        ) {
+          const sourceRuntime =
+            runtimeByDesiredId[
+              link.source
+            ]?.id
+
+          const targetRuntime =
+            runtimeByDesiredId[
+              link.target
+            ]?.id
+
+
+          if (
+            !sourceRuntime ||
+            !targetRuntime
+          ) {
+            return false
+          }
+
+
+          let vmRuntime = null
+          let networkRuntime = null
+          let vmPort = null
+
+
+          /*
+           * Desired pode estar desenhado:
+           *
+           * Network -> VM
+           *
+           * ou:
+           *
+           * VM -> Network
+           *
+           * O topology real do libvirt
+           * sempre representa VM -> Network.
+           */
+          if (
+            sourceRuntime.startsWith(
+              'vm:'
+            ) &&
+            targetRuntime.startsWith(
+              'net:'
+            )
+          ) {
+            vmRuntime =
+              sourceRuntime
+
+            networkRuntime =
+              targetRuntime
+
+            vmPort =
+              link.source_port
+          } else if (
+            sourceRuntime.startsWith(
+              'net:'
+            ) &&
+            targetRuntime.startsWith(
+              'vm:'
+            )
+          ) {
+            vmRuntime =
+              targetRuntime
+
+            networkRuntime =
+              sourceRuntime
+
+            vmPort =
+              link.target_port
+          } else {
+            return false
+          }
+
+
+          if (
+            !vmPort ||
+            vmPort.startsWith(
+              'network-'
+            )
+          ) {
+            return false
+          }
+
+
+          const signature = [
+            vmRuntime,
+            vmPort,
+            networkRuntime,
+          ].join('|')
+
+
+          return realVmNetworkLinks.has(
+            signature
+          )
+        }
+
+
         setLabInfo(topology)
 
         setCatalogDevices(
@@ -620,7 +759,13 @@ function App() {
           ),
 
           ...(desired.links || []).map(
-            createPlannedEdge
+            (link) =>
+              createPlannedEdge(
+                link,
+                isDesiredLinkReconciled(
+                  link
+                ),
+              )
           ),
         ])
       } catch (err) {

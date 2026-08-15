@@ -137,3 +137,18 @@
 
   background: #ffffff;
 }
+
+
+/*
+ * Desired link encontrado também
+ * no runtime.
+ *
+ * Verde sólido significa que a
+ * conexão foi materializada.
+ */
+.planned-edge.reconciled-edge
+.react-flow__edge-path {
+  stroke: #4f8a63;
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
