@@ -19,6 +19,7 @@ import NodePropertiesPanel from './components/NodePropertiesPanel'
 import ImageImportModal from './components/ImageImportModal'
 import ApplyPlanModal from './components/ApplyPlanModal'
 import ConsoleModal from './components/ConsoleModal'
+import LinkCaptureModal from './components/LinkCaptureModal'
 import PlannedDeviceNode from './components/PlannedDeviceNode'
 
 import '@xyflow/react/dist/style.css'
@@ -319,6 +320,12 @@ function App() {
   const [
     consoleTarget,
     setConsoleTarget,
+  ] = useState(null)
+
+
+  const [
+    captureTarget,
+    setCaptureTarget,
   ] = useState(null)
 
 
@@ -1771,6 +1778,55 @@ function App() {
     )
 
 
+  const onCaptureEdgeClick =
+    useCallback(
+      (
+        event,
+        edge,
+      ) => {
+        if (
+          !edge.data?.reconciled
+        ) {
+          return
+        }
+
+
+        const sourceNode =
+          nodes.find(
+            (node) =>
+              node.id === edge.source
+          )
+
+        const targetNode =
+          nodes.find(
+            (node) =>
+              node.id === edge.target
+          )
+
+
+        setCaptureTarget({
+          linkId:
+            edge.id,
+
+          sourceName:
+            sourceNode?.data?.name ||
+            edge.source,
+
+          targetName:
+            targetNode?.data?.name ||
+            edge.target,
+
+          portLabel:
+            edge.label ||
+            '',
+        })
+      },
+      [
+        nodes,
+      ]
+    )
+
+
   const onEdgeDoubleClick =
     useCallback(
       async (_event, edge) => {
@@ -1955,6 +2011,10 @@ function App() {
               onConnect
             }
 
+            onEdgeClick={
+              onCaptureEdgeClick
+            }
+
             onEdgeDoubleClick={
               onEdgeDoubleClick
             }
@@ -2070,6 +2130,21 @@ function App() {
           />
         )}
       </div>
+
+
+      {captureTarget && (
+        <LinkCaptureModal
+          link={
+            captureTarget
+          }
+
+          onClose={() =>
+            setCaptureTarget(
+              null
+            )
+          }
+        />
+      )}
 
 
       {consoleTarget && (

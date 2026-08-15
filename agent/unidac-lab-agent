@@ -2017,6 +2017,664 @@ def vm_undefine(
         conn.close()
 
 
+
+CAPTURE_ROOT = Path(
+    "/var/lib/libvirt/images/"
+    "unidac-lab/captures"
+)
+
+CAPTURE_ID_RE = re.compile(
+    r"^cap-[a-f0-9]{32}$"
+)
+
+CAPTURE_PORT_RE = re.compile(
+    r"^(port|nic)([1-9][0-9]{0,2})$"
+)
+
+CAPTURE_NETWORK_RE = re.compile(
+    r"^(default|ulab-net-[a-f0-9]{8})$"
+)
+
+CAPTURE_INTERFACE_RE = re.compile(
+    r"^vnet[0-9]+$"
+)
+
+
+def validate_capture_id(
+    capture_id,
+):
+    if not CAPTURE_ID_RE.fullmatch(
+        capture_id or ""
+    ):
+        fail(
+            "Capture ID invalido: "
+            f"{capture_id}"
+        )
+
+
+def capture_paths(
+    capture_id,
+):
+    validate_capture_id(
+        capture_id
+    )
+
+    return {
+        "pcap":
+            CAPTURE_ROOT /
+            f"{capture_id}.pcap",
+
+        "pid":
+            CAPTURE_ROOT /
+            f"{capture_id}.pid",
+
+        "log":
+            CAPTURE_ROOT /
+            f"{capture_id}.log",
+    }
+
+
+def capture_process_matches(
+    pid,
+    pcap_path,
+):
+    proc_path = Path(
+        f"/proc/{pid}/cmdline"
+    )
+
+    if not proc_path.exists():
+        return False
+
+
+    try:
+        command = (
+            proc_path
+            .read_bytes()
+            .replace(
+                b"\x00",
+                b" ",
+            )
+            .decode(
+                "utf-8",
+                errors="replace",
+            )
+        )
+
+    except OSError:
+        return False
+
+
+    return (
+        "tcpdump" in command
+        and
+        str(pcap_path) in command
+    )
+
+
+def resolve_capture_interface(
+    conn,
+    domain_name,
+    port_name,
+    expected_network,
+):
+    validate_managed_domain_name(
+        domain_name
+    )
+
+
+    match = CAPTURE_PORT_RE.fullmatch(
+        port_name or ""
+    )
+
+    if not match:
+        fail(
+            "Porta nao suportada "
+            "para captura: "
+            f"{port_name}"
+        )
+
+
+    if not CAPTURE_NETWORK_RE.fullmatch(
+        expected_network or ""
+    ):
+        fail(
+            "Rede invalida para captura: "
+            f"{expected_network}"
+        )
+
+
+    domain = get_managed_domain(
+        conn,
+        domain_name,
+    )
+
+
+    if not domain.isActive():
+        fail(
+            "VM precisa estar running "
+            "para captura: "
+            f"{domain_name}"
+        )
+
+
+    root = ET.fromstring(
+        domain.XMLDesc(0)
+    )
+
+
+    interfaces = root.findall(
+        "./devices/interface"
+    )
+
+
+    index = int(
+        match.group(2)
+    ) - 1
+
+
+    if index >= len(interfaces):
+        fail(
+            "Porta nao existe no dominio: "
+            f"{port_name}"
+        )
+
+
+    interface = interfaces[
+        index
+    ]
+
+
+    source = interface.find(
+        "source"
+    )
+
+    actual_network = (
+        source.get("network")
+        if source is not None
+        else None
+    )
+
+
+    if (
+        actual_network
+        != expected_network
+    ):
+        fail(
+            "Rede runtime diverge do "
+            "Desired State para "
+            f"{port_name}: "
+            f"{actual_network}"
+        )
+
+
+    target = interface.find(
+        "target"
+    )
+
+    target_dev = (
+        target.get("dev")
+        if target is not None
+        else None
+    )
+
+
+    if not CAPTURE_INTERFACE_RE.fullmatch(
+        target_dev or ""
+    ):
+        fail(
+            "Interface runtime invalida "
+            "para captura."
+        )
+
+
+    mac_node = interface.find(
+        "mac"
+    )
+
+    mac = (
+        mac_node.get("address")
+        if mac_node is not None
+        else None
+    )
+
+
+    return {
+        "interface":
+            target_dev,
+
+        "network":
+            actual_network,
+
+        "mac":
+            mac,
+    }
+
+
+def capture_start(
+    capture_id,
+    domain_name,
+    port_name,
+    expected_network,
+):
+    import shutil
+    import time
+
+    require_root()
+
+    paths = capture_paths(
+        capture_id
+    )
+
+
+    CAPTURE_ROOT.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    CAPTURE_ROOT.chmod(
+        0o755
+    )
+
+
+    if paths["pcap"].exists():
+        fail(
+            "Capture ID ja utilizado: "
+            f"{capture_id}"
+        )
+
+
+    conn = get_connection()
+
+    try:
+        runtime = (
+            resolve_capture_interface(
+                conn,
+                domain_name,
+                port_name,
+                expected_network,
+            )
+        )
+
+    finally:
+        conn.close()
+
+
+    tcpdump = shutil.which(
+        "tcpdump"
+    )
+
+    if not tcpdump:
+        fail(
+            "tcpdump nao encontrado."
+        )
+
+
+    with paths["log"].open(
+        "wb"
+    ) as log_handle:
+        process = subprocess.Popen(
+            [
+                tcpdump,
+                "-U",
+                "-n",
+                "-i",
+                runtime[
+                    "interface"
+                ],
+                "-s",
+                "0",
+                "-w",
+                str(
+                    paths["pcap"]
+                ),
+            ],
+            stdin=
+                subprocess.DEVNULL,
+            stdout=
+                subprocess.DEVNULL,
+            stderr=
+                log_handle,
+            start_new_session=
+                True,
+            close_fds=
+                True,
+        )
+
+
+    time.sleep(
+        0.35
+    )
+
+
+    if process.poll() is not None:
+        message = ""
+
+        if paths["log"].exists():
+            message = (
+                paths["log"]
+                .read_text(
+                    errors="replace"
+                )
+                .strip()
+            )
+
+        try:
+            paths["pcap"].unlink()
+
+        except FileNotFoundError:
+            pass
+
+        fail(
+            "Falha iniciando tcpdump: "
+            + (
+                message
+                or
+                f"exit={process.returncode}"
+            )
+        )
+
+
+    paths["pid"].write_text(
+        str(
+            process.pid
+        )
+    )
+
+    paths["pid"].chmod(
+        0o644
+    )
+
+
+    if paths["pcap"].exists():
+        paths["pcap"].chmod(
+            0o644
+        )
+
+
+    output(
+        {
+            "status":
+                "running",
+
+            "capture_id":
+                capture_id,
+
+            "domain":
+                domain_name,
+
+            "port":
+                port_name,
+
+            "network":
+                expected_network,
+
+            "interface":
+                runtime[
+                    "interface"
+                ],
+
+            "mac":
+                runtime[
+                    "mac"
+                ],
+
+            "pcap":
+                str(
+                    paths["pcap"]
+                ),
+
+            "pid":
+                process.pid,
+        }
+    )
+
+
+def capture_status(
+    capture_id,
+):
+    require_root()
+
+    paths = capture_paths(
+        capture_id
+    )
+
+
+    pid = None
+
+    if paths["pid"].exists():
+        try:
+            pid = int(
+                paths["pid"]
+                .read_text()
+                .strip()
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            pid = None
+
+
+    running = (
+        pid is not None
+        and
+        capture_process_matches(
+            pid,
+            paths["pcap"],
+        )
+    )
+
+
+    if running:
+        status = "running"
+
+    elif paths["pcap"].exists():
+        status = "finished"
+
+    else:
+        status = "absent"
+
+
+    size_bytes = (
+        paths["pcap"].stat().st_size
+        if paths["pcap"].exists()
+        else 0
+    )
+
+
+    output(
+        {
+            "status":
+                status,
+
+            "capture_id":
+                capture_id,
+
+            "running":
+                running,
+
+            "pcap":
+                str(
+                    paths["pcap"]
+                ),
+
+            "size_bytes":
+                size_bytes,
+        }
+    )
+
+
+def capture_stop(
+    capture_id,
+):
+    import os
+    import signal
+    import time
+
+    require_root()
+
+    paths = capture_paths(
+        capture_id
+    )
+
+
+    if not paths["pid"].exists():
+        if paths["pcap"].exists():
+            paths["pcap"].chmod(
+                0o644
+            )
+
+            output(
+                {
+                    "status":
+                        "finished",
+
+                    "capture_id":
+                        capture_id,
+
+                    "running":
+                        False,
+
+                    "pcap":
+                        str(
+                            paths["pcap"]
+                        ),
+
+                    "size_bytes":
+                        paths["pcap"]
+                        .stat()
+                        .st_size,
+                }
+            )
+
+            return
+
+
+        output(
+            {
+                "status":
+                    "absent",
+
+                "capture_id":
+                    capture_id,
+
+                "running":
+                    False,
+
+                "pcap":
+                    str(
+                        paths["pcap"]
+                    ),
+
+                "size_bytes":
+                    0,
+            }
+        )
+
+        return
+
+
+    try:
+        pid = int(
+            paths["pid"]
+            .read_text()
+            .strip()
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        paths["pid"].unlink(
+            missing_ok=True
+        )
+
+        fail(
+            "PID de captura invalido."
+        )
+
+
+    if capture_process_matches(
+        pid,
+        paths["pcap"],
+    ):
+        try:
+            os.kill(
+                pid,
+                signal.SIGINT,
+            )
+
+        except ProcessLookupError:
+            pass
+
+
+        for _ in range(50):
+            if not capture_process_matches(
+                pid,
+                paths["pcap"],
+            ):
+                break
+
+            time.sleep(
+                0.1
+            )
+
+
+        if capture_process_matches(
+            pid,
+            paths["pcap"],
+        ):
+            try:
+                os.kill(
+                    pid,
+                    signal.SIGTERM,
+                )
+
+            except ProcessLookupError:
+                pass
+
+
+    paths["pid"].unlink(
+        missing_ok=True
+    )
+
+
+    if paths["pcap"].exists():
+        paths["pcap"].chmod(
+            0o644
+        )
+
+
+    size_bytes = (
+        paths["pcap"].stat().st_size
+        if paths["pcap"].exists()
+        else 0
+    )
+
+
+    output(
+        {
+            "status":
+                "stopped",
+
+            "capture_id":
+                capture_id,
+
+            "running":
+                False,
+
+            "pcap":
+                str(
+                    paths["pcap"]
+                ),
+
+            "size_bytes":
+                size_bytes,
+        }
+    )
+
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -2142,6 +2800,52 @@ def main():
             )
 
         vm_undefine(
+            sys.argv[2]
+        )
+
+        return
+
+
+    if command == "capture-start":
+        if len(sys.argv) != 6:
+            fail(
+                "Uso: capture-start "
+                "<capture-id> <domain> "
+                "<port> <network>"
+            )
+
+        capture_start(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+        )
+
+        return
+
+
+    if command == "capture-stop":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: capture-stop "
+                "<capture-id>"
+            )
+
+        capture_stop(
+            sys.argv[2]
+        )
+
+        return
+
+
+    if command == "capture-status":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: capture-status "
+                "<capture-id>"
+            )
+
+        capture_status(
             sys.argv[2]
         )
 

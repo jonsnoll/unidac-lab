@@ -246,3 +246,36 @@ def vm_undefine(
         "vm-undefine",
         domain_name,
     )
+
+
+def capture_start(
+    capture_id,
+    domain_name,
+    port_name,
+    network_name,
+):
+    return run_agent(
+        "capture-start",
+        capture_id,
+        domain_name,
+        port_name,
+        network_name,
+    )
+
+
+def capture_stop(
+    capture_id,
+):
+    return run_agent(
+        "capture-stop",
+        capture_id,
+    )
+
+
+def capture_status(
+    capture_id,
+):
+    return run_agent(
+        "capture-status",
+        capture_id,
+    )
