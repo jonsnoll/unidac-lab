@@ -627,6 +627,17 @@ function App() {
          *
          * vm:ulab-fgt...|port1|net:default
          */
+        /*
+         * O Observed State do libvirt usa
+         * port1, port2, ... para a ordem
+         * das interfaces.
+         *
+         * Templates generic-qemu usam
+         * nic1, nic2, ... no Desired State.
+         *
+         * As duas nomenclaturas representam
+         * a mesma posicao da interface.
+         */
         const realVmNetworkLinks =
           new Set(
             (topology.links || [])
@@ -638,13 +649,33 @@ function App() {
                   link.target &&
                   link.source_port
               )
-              .map(
-                (link) =>
-                  [
-                    link.source,
-                    link.source_port,
-                    link.target,
-                  ].join('|')
+              .flatMap(
+                (link) => {
+                  const signatures = [
+                    [
+                      link.source,
+                      link.source_port,
+                      link.target,
+                    ].join('|'),
+                  ]
+
+                  const portMatch =
+                    link.source_port.match(
+                      /^port(\d+)$/
+                    )
+
+                  if (portMatch) {
+                    signatures.push(
+                      [
+                        link.source,
+                        `nic${portMatch[1]}`,
+                        link.target,
+                      ].join('|')
+                    )
+                  }
+
+                  return signatures
+                }
               )
           )
 
