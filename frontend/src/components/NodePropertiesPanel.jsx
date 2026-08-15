@@ -145,6 +145,12 @@ function NodePropertiesPanel({
     )
 
 
+  const runtimeAdopted =
+    node.properties
+      ?.runtime_ownership ===
+      'adopted'
+
+
   const handleLifecycle =
     async (operation) => {
       if (
@@ -486,6 +492,19 @@ function NodePropertiesPanel({
               </div>
 
 
+              {runtimeAdopted && (
+                <div>
+                  <span>
+                    Ownership
+                  </span>
+
+                  <strong>
+                    ADOPTED
+                  </strong>
+                </div>
+              )}
+
+
               {lifecycleError && (
                 <div className="runtime-error">
                   {lifecycleError}
@@ -587,7 +606,8 @@ function NodePropertiesPanel({
 
               {
                 runtimeState ===
-                'shutoff' && (
+                'shutoff' &&
+                !runtimeAdopted && (
                   <div className="runtime-remove">
                     <button
                       type="button"

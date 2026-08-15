@@ -1,3 +1,4 @@
+
 import re
 
 from app.apply_plan_service import (
@@ -27,17 +28,14 @@ def resolve_console_domain(
 ):
     plan = build_apply_plan()
 
-
     for action in plan.get(
         "actions",
         [],
     ):
-        if (
-            action.get("node_id")
-            != node_id
-        ):
+        if action.get(
+            "node_id"
+        ) != node_id:
             continue
-
 
         if action.get(
             "action"
@@ -47,18 +45,26 @@ def resolve_console_domain(
         }:
             continue
 
-
         domain_name = action.get(
             "domain_name"
         )
 
-
         if not domain_name:
             continue
 
+        adopted = (
+            action.get(
+                "runtime_ownership"
+            )
+            == "adopted"
+        )
 
-        if not DOMAIN_RE.fullmatch(
-            domain_name
+        if (
+            not adopted
+            and
+            not DOMAIN_RE.fullmatch(
+                domain_name
+            )
         ):
             raise ConsoleError(
                 "Dominio fora do namespace "
@@ -66,9 +72,10 @@ def resolve_console_domain(
                 kind="invalid-domain",
             )
 
-
         if (
-            action.get("action")
+            action.get(
+                "action"
+            )
             == "create-vm"
         ):
             raise ConsoleError(
@@ -77,7 +84,6 @@ def resolve_console_domain(
                 "primeiro.",
                 kind="runtime-not-created",
             )
-
 
         return {
             "node_id":
@@ -90,8 +96,14 @@ def resolve_console_domain(
 
             "domain_name":
                 domain_name,
-        }
 
+            "runtime_ownership":
+                (
+                    "adopted"
+                    if adopted
+                    else "managed"
+                ),
+        }
 
     raise ConsoleError(
         "VM gerenciada nao encontrada.",

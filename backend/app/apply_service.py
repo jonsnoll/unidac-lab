@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 from app.agent_client import (
@@ -54,7 +55,6 @@ def validate_plan_for_execution(
             plan=plan,
         )
 
-
     unsupported = []
 
     for action in plan.get(
@@ -70,11 +70,9 @@ def validate_plan_for_execution(
         ):
             continue
 
-
         template_id = action.get(
             "template_id"
         )
-
 
         if (
             template_id
@@ -97,7 +95,6 @@ def validate_plan_for_execution(
                         template_id,
                 }
             )
-
 
     if unsupported:
         names = ", ".join(
@@ -130,24 +127,17 @@ def execute_apply():
         plan
     )
 
-
     results = []
-
 
     try:
         for action in plan.get(
             "actions",
             [],
         ):
-            action_type = (
-                action.get(
-                    "action"
-                )
+            action_type = action.get(
+                "action"
             )
 
-
-            # Cloud NAT usa a rede
-            # libvirt default existente.
             if (
                 action_type
                 == "reuse-network"
@@ -155,7 +145,10 @@ def execute_apply():
                 action.get(
                     "reason"
                 )
-                == "cloud-nat"
+                in {
+                    "cloud-nat",
+                    "adopted-network",
+                }
             ):
                 results.append(
                     {
@@ -183,30 +176,30 @@ def execute_apply():
                                     ],
 
                                 "reason":
-                                    "cloud-nat",
+                                    action.get(
+                                        "reason"
+                                    ),
+
+                                "ownership":
+                                    action.get(
+                                        "runtime_ownership"
+                                    ),
                             },
                     }
                 )
-
                 continue
-
 
             if action_type in {
                 "create-network",
                 "reuse-network",
             }:
-                network_name = (
-                    action.get(
-                        "libvirt_network"
-                    )
+                network_name = action.get(
+                    "libvirt_network"
                 )
 
-                bridge_name = (
-                    action.get(
-                        "bridge"
-                    )
+                bridge_name = action.get(
+                    "bridge"
                 )
-
 
                 if not bridge_name:
                     raise ApplyError(
@@ -218,12 +211,10 @@ def execute_apply():
                         step=action,
                     )
 
-
                 result = ensure_network(
                     network_name,
                     bridge_name,
                 )
-
 
                 results.append(
                     {
@@ -244,19 +235,64 @@ def execute_apply():
                             result,
                     }
                 )
-
                 continue
 
+            if (
+                action_type
+                == "reuse-vm"
+                and
+                action.get(
+                    "runtime_ownership"
+                )
+                == "adopted"
+            ):
+                results.append(
+                    {
+                        "step":
+                            "vm",
+
+                        "node_id":
+                            action[
+                                "node_id"
+                            ],
+
+                        "node_name":
+                            action[
+                                "node_name"
+                            ],
+
+                        "result":
+                            {
+                                "status":
+                                    "adopted",
+
+                                "domain":
+                                    action[
+                                        "domain_name"
+                                    ],
+
+                                "domain_uuid":
+                                    action.get(
+                                        "domain_uuid"
+                                    ),
+
+                                "ownership":
+                                    "adopted",
+
+                                "changed":
+                                    False,
+                            },
+                    }
+                )
+                continue
 
             if action_type in {
                 "create-vm",
                 "reuse-vm",
             }:
-                template_id = (
-                    action[
-                        "template_id"
-                    ]
-                )
+                template_id = action[
+                    "template_id"
+                ]
 
                 profile = (
                     SUPPORTED_VM_TEMPLATES[
@@ -264,16 +300,13 @@ def execute_apply():
                     ]
                 )
 
-
-                image_spec = (
-                    action.get(
-                        "image"
-                    )
+                image_spec = action.get(
+                    "image"
                 )
 
                 if not image_spec:
                     raise ApplyError(
-                        "Acao create-vm "
+                        "Acao de VM gerenciada "
                         "sem imagem.",
                         kind=
                             "invalid-vm-action",
@@ -281,15 +314,13 @@ def execute_apply():
                         step=action,
                     )
 
-
-                image_id = (
-                    image_spec["id"]
-                )
+                image_id = image_spec[
+                    "id"
+                ]
 
                 image = get_image(
                     image_id
                 )
-
 
                 if image is None:
                     raise ApplyError(
@@ -301,7 +332,6 @@ def execute_apply():
                         plan=plan,
                         step=action,
                     )
-
 
                 vendor = image.get(
                     "vendor"
@@ -316,7 +346,6 @@ def execute_apply():
                         step=action,
                     )
 
-
                 storage_relative_path = (
                     image.get(
                         "storage",
@@ -325,7 +354,6 @@ def execute_apply():
                         "relative_path"
                     )
                 )
-
 
                 if not storage_relative_path:
                     raise ApplyError(
@@ -337,7 +365,6 @@ def execute_apply():
                         step=action,
                     )
 
-
                 runtime_image_id = (
                     Path(
                         storage_relative_path
@@ -345,7 +372,6 @@ def execute_apply():
                     .parent
                     .name
                 )
-
 
                 if not runtime_image_id:
                     raise ApplyError(
@@ -358,14 +384,10 @@ def execute_apply():
                         step=action,
                     )
 
-
-                image_result = (
-                    ensure_image(
-                        vendor,
-                        runtime_image_id,
-                    )
+                image_result = ensure_image(
+                    vendor,
+                    runtime_image_id,
                 )
-
 
                 results.append(
                     {
@@ -387,18 +409,14 @@ def execute_apply():
                     }
                 )
 
-
-                overlay_result = (
-                    ensure_overlay(
-                        LAB_ID,
-                        action[
-                            "domain_name"
-                        ],
-                        vendor,
-                        runtime_image_id,
-                    )
+                overlay_result = ensure_overlay(
+                    LAB_ID,
+                    action[
+                        "domain_name"
+                    ],
+                    vendor,
+                    runtime_image_id,
                 )
-
 
                 results.append(
                     {
@@ -419,7 +437,6 @@ def execute_apply():
                             overlay_result,
                     }
                 )
-
 
                 vm_spec = {
                     "lab_id":
@@ -455,11 +472,9 @@ def execute_apply():
                         ],
                 }
 
-
                 vm_result = ensure_vm(
                     vm_spec
                 )
-
 
                 results.append(
                     {
@@ -480,9 +495,7 @@ def execute_apply():
                             vm_result,
                     }
                 )
-
                 continue
-
 
             raise ApplyError(
                 "Tipo de acao ainda nao "
@@ -493,7 +506,6 @@ def execute_apply():
                 plan=plan,
                 step=action,
             )
-
 
     except AgentError as error:
         raise ApplyError(
@@ -506,11 +518,7 @@ def execute_apply():
             cause=error,
         ) from error
 
-
-    final_plan = (
-        build_apply_plan()
-    )
-
+    final_plan = build_apply_plan()
 
     return {
         "status":
@@ -525,29 +533,27 @@ def execute_apply():
         "results":
             results,
 
-        "before":
-            {
-                "ready":
-                    plan[
-                        "ready"
-                    ],
+        "before": {
+            "ready":
+                plan[
+                    "ready"
+                ],
 
-                "summary":
-                    plan[
-                        "summary"
-                    ],
-            },
+            "summary":
+                plan[
+                    "summary"
+                ],
+        },
 
-        "after":
-            {
-                "ready":
-                    final_plan[
-                        "ready"
-                    ],
+        "after": {
+            "ready":
+                final_plan[
+                    "ready"
+                ],
 
-                "summary":
-                    final_plan[
-                        "summary"
-                    ],
-            },
+            "summary":
+                final_plan[
+                    "summary"
+                ],
+        },
     }

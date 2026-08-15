@@ -48,6 +48,13 @@ DOMAIN_RE = re.compile(
     r"[a-z0-9-]{1,62}$"
 )
 
+ADOPTED_DOMAIN_REGISTRY = Path(
+    os.environ.get(
+        "UNIDAC_LAB_ADOPTED_REGISTRY",
+        "/etc/unidac-lab/adopted-domains.json",
+    )
+)
+
 
 ALLOWED_COMMANDS = {
     "health",
@@ -281,17 +288,97 @@ def handle_exec(
     )
 
 
+
+def adopted_console_uuid(
+    domain_name,
+):
+    if not ADOPTED_DOMAIN_REGISTRY.is_file():
+        return None
+
+    try:
+        data = json.loads(
+            ADOPTED_DOMAIN_REGISTRY.read_text(
+                encoding="utf-8"
+            )
+        )
+
+    except (
+        OSError,
+        json.JSONDecodeError,
+    ):
+        return None
+
+    entry = data.get(
+        "domains",
+        {},
+    ).get(
+        domain_name
+    )
+
+    if not isinstance(
+        entry,
+        dict,
+    ):
+        return None
+
+    value = entry.get(
+        "uuid"
+    )
+
+    return (
+        value
+        if isinstance(
+            value,
+            str,
+        )
+        else None
+    )
+
+
 def validate_console_domain(
     domain_name,
 ):
-    if not DOMAIN_RE.fullmatch(
-        domain_name or ""
+    expected_uuid = adopted_console_uuid(
+        domain_name
+    )
+
+    if (
+        not DOMAIN_RE.fullmatch(
+            domain_name or ""
+        )
+        and
+        not expected_uuid
     ):
         raise RuntimeError(
             "Dominio fora do namespace "
-            "gerenciado."
+            "gerenciado/adotado."
         )
 
+    if expected_uuid:
+        uuid_process = subprocess.run(
+            [
+                VIRSH,
+                "-c",
+                LIBVIRT_URI,
+                "domuuid",
+                domain_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+
+        if (
+            uuid_process.returncode != 0
+            or
+            uuid_process.stdout.strip()
+            != expected_uuid
+        ):
+            raise RuntimeError(
+                "UUID do dominio adotado "
+                "divergiu do registry."
+            )
 
     process = subprocess.run(
         [
@@ -307,7 +394,6 @@ def validate_console_domain(
         timeout=10,
     )
 
-
     if process.returncode != 0:
         raise RuntimeError(
             process.stderr.strip()
@@ -315,13 +401,11 @@ def validate_console_domain(
             "Dominio nao encontrado."
         )
 
-
     state = (
         process.stdout
         .strip()
         .lower()
     )
-
 
     if state != "running":
         raise RuntimeError(
@@ -329,7 +413,6 @@ def validate_console_domain(
             "com VM running. "
             f"Estado atual: {state}"
         )
-
 
 def handle_console(
     connection,

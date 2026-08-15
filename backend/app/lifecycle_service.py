@@ -1,3 +1,4 @@
+
 from app.agent_client import (
     AgentError,
     vm_restart,
@@ -44,17 +45,14 @@ def resolve_runtime_vm(
 ):
     plan = build_apply_plan()
 
-
     for action in plan.get(
         "actions",
         [],
     ):
-        if (
-            action.get("node_id")
-            != node_id
-        ):
+        if action.get(
+            "node_id"
+        ) != node_id:
             continue
-
 
         if action.get(
             "action"
@@ -64,28 +62,27 @@ def resolve_runtime_vm(
         }:
             continue
 
-
         domain_name = action.get(
             "domain_name"
         )
 
-
         if not domain_name:
             continue
 
-
         if (
-            action.get("action")
+            action.get(
+                "action"
+            )
             == "create-vm"
         ):
             raise LifecycleError(
                 "A VM ainda nao existe "
                 "no runtime. Execute "
                 "Apply Changes primeiro.",
-                kind="runtime-not-created",
+                kind=
+                    "runtime-not-created",
                 node_id=node_id,
             )
-
 
         return {
             "node_id":
@@ -103,8 +100,13 @@ def resolve_runtime_vm(
                 action.get(
                     "template_id"
                 ),
-        }
 
+            "runtime_ownership":
+                action.get(
+                    "runtime_ownership",
+                    "managed",
+                ),
+        }
 
     raise LifecycleError(
         "Node de VM gerenciado "
@@ -122,7 +124,6 @@ def execute_vm_lifecycle(
         operation
     )
 
-
     if operation_func is None:
         raise LifecycleError(
             "Operacao de lifecycle "
@@ -132,15 +133,15 @@ def execute_vm_lifecycle(
             operation=operation,
         )
 
-
     runtime = resolve_runtime_vm(
         node_id
     )
 
-
     try:
         result = operation_func(
-            runtime["domain_name"]
+            runtime[
+                "domain_name"
+            ]
         )
 
     except AgentError as error:
@@ -151,7 +152,6 @@ def execute_vm_lifecycle(
             operation=operation,
             cause=error,
         ) from error
-
 
     return {
         "status":
@@ -173,6 +173,11 @@ def execute_vm_lifecycle(
                 "domain_name"
             ],
 
+        "runtime_ownership":
+            runtime[
+                "runtime_ownership"
+            ],
+
         "result":
             result,
     }
@@ -181,55 +186,8 @@ def execute_vm_lifecycle(
 def resolve_managed_vm(
     node_id,
 ):
-    plan = build_apply_plan()
-
-    for action in plan.get(
-        "actions",
-        [],
-    ):
-        if (
-            action.get("node_id")
-            != node_id
-        ):
-            continue
-
-        if action.get(
-            "action"
-        ) not in {
-            "create-vm",
-            "reuse-vm",
-        }:
-            continue
-
-        domain_name = action.get(
-            "domain_name"
-        )
-
-        if not domain_name:
-            continue
-
-        return {
-            "node_id":
-                node_id,
-
-            "node_name":
-                action.get(
-                    "node_name"
-                ),
-
-            "domain_name":
-                domain_name,
-
-            "exists":
-                action.get("action")
-                == "reuse-vm",
-        }
-
-    raise LifecycleError(
-        "Node de VM gerenciado "
-        "nao encontrado.",
-        kind="vm-node-not-found",
-        node_id=node_id,
+    return resolve_runtime_vm(
+        node_id
     )
 
 
@@ -244,13 +202,34 @@ def remove_vm_runtime(
         node_id
     )
 
+    if (
+        runtime.get(
+            "runtime_ownership"
+        )
+        == "adopted"
+    ):
+        raise LifecycleError(
+            "Runtime adotado e protegido. "
+            "Remova apenas o vinculo do "
+            "Desired State; o dominio e "
+            "seu disco serao preservados.",
+            kind=
+                "adopted-runtime-protected",
+            node_id=node_id,
+            operation="remove-runtime",
+        )
+
     try:
         result = vm_undefine(
-            runtime["domain_name"]
+            runtime[
+                "domain_name"
+            ]
         )
 
     except AgentError as error:
-        message = str(error)
+        message = str(
+            error
+        )
 
         kind = "agent-error"
 
@@ -279,10 +258,14 @@ def remove_vm_runtime(
             node_id,
 
         "node_name":
-            runtime["node_name"],
+            runtime[
+                "node_name"
+            ],
 
         "domain_name":
-            runtime["domain_name"],
+            runtime[
+                "domain_name"
+            ],
 
         "result":
             result,

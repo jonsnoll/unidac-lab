@@ -57,6 +57,17 @@ DOMAIN_RE = re.compile(
     r"^ulab-[a-z0-9][a-z0-9-]{1,62}$"
 )
 
+ADOPTED_DOMAIN_REGISTRY = Path(
+    os.environ.get(
+        "UNIDAC_LAB_ADOPTED_REGISTRY",
+        "/etc/unidac-lab/adopted-domains.json",
+    )
+)
+
+ADOPTED_NETWORK_RE = re.compile(
+    r"^[A-Za-z0-9_.-]{1,64}$"
+)
+
 
 def silent_libvirt_error(
     _context,
@@ -1703,6 +1714,81 @@ def vm_ensure():
 
 
 
+
+def load_adopted_domain_registry():
+    if not ADOPTED_DOMAIN_REGISTRY.is_file():
+        return {}
+
+    try:
+        data = json.loads(
+            ADOPTED_DOMAIN_REGISTRY.read_text(
+                encoding="utf-8"
+            )
+        )
+
+    except (
+        OSError,
+        json.JSONDecodeError,
+    ) as error:
+        fail(
+            "Registry de dominios adotados "
+            f"invalido: {error}"
+        )
+
+    domains = data.get(
+        "domains",
+        {}
+    )
+
+    if not isinstance(
+        domains,
+        dict,
+    ):
+        fail(
+            "Registry de dominios adotados "
+            "possui formato invalido."
+        )
+
+    return domains
+
+
+def adopted_domain_uuid(
+    domain_name,
+):
+    entry = load_adopted_domain_registry().get(
+        domain_name
+    )
+
+    if not isinstance(
+        entry,
+        dict,
+    ):
+        return None
+
+    value = entry.get(
+        "uuid"
+    )
+
+    if not isinstance(
+        value,
+        str,
+    ):
+        return None
+
+    return value
+
+
+def is_adopted_domain_name(
+    domain_name,
+):
+    return (
+        adopted_domain_uuid(
+            domain_name
+        )
+        is not None
+    )
+
+
 def validate_managed_domain_name(
     domain_name,
 ):
@@ -1714,45 +1800,22 @@ def validate_managed_domain_name(
             "Nome de dominio invalido."
         )
 
-
-    if (
-        len(domain_name) < 6
-        or len(domain_name) > 64
-        or not domain_name.startswith(
-            "ulab-"
-        )
+    if DOMAIN_RE.fullmatch(
+        domain_name
     ):
-        fail(
-            "Dominio fora do namespace "
-            "gerenciado pelo unidac-lab: "
-            f"{domain_name}"
-        )
+        return
 
+    if is_adopted_domain_name(
+        domain_name
+    ):
+        return
 
-    allowed = set(
-        "abcdefghijklmnopqrstuvwxyz"
-        "0123456789-"
+    fail(
+        "Dominio fora do namespace "
+        "gerenciado/adotado pelo "
+        "unidac-lab: "
+        f"{domain_name}"
     )
-
-
-    if any(
-        char not in allowed
-        for char in domain_name
-    ):
-        fail(
-            "Nome de dominio gerenciado "
-            "contem caracteres invalidos: "
-            f"{domain_name}"
-        )
-
-
-    if domain_name.endswith("-"):
-        fail(
-            "Nome de dominio gerenciado "
-            "invalido: "
-            f"{domain_name}"
-        )
-
 
 def get_managed_domain(
     conn,
@@ -1762,19 +1825,33 @@ def get_managed_domain(
         domain_name
     )
 
-
     try:
-        return conn.lookupByName(
+        domain = conn.lookupByName(
             domain_name
         )
 
     except Exception:
         fail(
-            "Dominio gerenciado "
+            "Dominio gerenciado/adotado "
             "nao encontrado: "
             f"{domain_name}"
         )
 
+    expected_uuid = adopted_domain_uuid(
+        domain_name
+    )
+
+    if expected_uuid:
+        actual_uuid = domain.UUIDString()
+
+        if actual_uuid != expected_uuid:
+            fail(
+                "UUID do dominio adotado "
+                "divergiu do registry: "
+                f"{domain_name}"
+            )
+
+    return domain
 
 def vm_start(
     domain_name,
@@ -2142,7 +2219,18 @@ def resolve_capture_interface(
         )
 
 
-    if not CAPTURE_NETWORK_RE.fullmatch(
+    if is_adopted_domain_name(
+        domain_name
+    ):
+        if not ADOPTED_NETWORK_RE.fullmatch(
+            expected_network or ""
+        ):
+            fail(
+                "Rede adotada invalida para captura: "
+                f"{expected_network}"
+            )
+
+    elif not CAPTURE_NETWORK_RE.fullmatch(
         expected_network or ""
     ):
         fail(

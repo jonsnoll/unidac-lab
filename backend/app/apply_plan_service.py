@@ -1,3 +1,4 @@
+
 import re
 
 
@@ -62,9 +63,47 @@ def runtime_network_name(node):
 
 
 def runtime_bridge_name(node):
-    # Interface Linux precisa ficar curta.
     return (
         f"ulb{node_token(node['id'])}"
+    )
+
+
+def is_adopted(node):
+    properties = node.get(
+        "properties",
+        {},
+    )
+
+    return (
+        properties.get(
+            "runtime_ownership"
+        )
+        == "adopted"
+    )
+
+
+def resolved_network_name(
+    node,
+    device,
+):
+    if device["kind"] == "cloud":
+        return "default"
+
+    if device["kind"] != "network":
+        return None
+
+    properties = node.get(
+        "properties",
+        {},
+    )
+
+    if is_adopted(node):
+        return properties.get(
+            "network_name"
+        )
+
+    return runtime_network_name(
+        node
     )
 
 
@@ -106,16 +145,16 @@ def find_links_for_port(
 
 
 def build_apply_plan():
-    desired = (
-        get_desired_topology()
+    desired = get_desired_topology()
+
+    nodes = desired.get(
+        "nodes",
+        [],
     )
 
-    nodes = (
-        desired.get("nodes", [])
-    )
-
-    links = (
-        desired.get("links", [])
+    links = desired.get(
+        "links",
+        [],
     )
 
     nodes_by_id = {
@@ -133,13 +172,10 @@ def build_apply_plan():
         for network in get_networks()
     }
 
-
     errors = []
     warnings = []
     actions = []
 
-
-    # Validação estrutural dos links.
     for link in links:
         if (
             link["source"]
@@ -154,8 +190,7 @@ def build_apply_plan():
                         link["id"],
 
                     "message":
-                        "Origem do link "
-                        "nao existe.",
+                        "Origem do link nao existe.",
                 }
             )
 
@@ -172,11 +207,9 @@ def build_apply_plan():
                         link["id"],
 
                     "message":
-                        "Destino do link "
-                        "nao existe.",
+                        "Destino do link nao existe.",
                 }
             )
-
 
     # Infrastructure primeiro.
     for node in nodes:
@@ -195,21 +228,15 @@ def build_apply_plan():
 
                     "message":
                         (
-                            "Template nao "
-                            "encontrado: "
+                            "Template nao encontrado: "
                             f"{node['template_id']}"
                         ),
                 }
             )
-
             continue
 
-
         if device["kind"] == "cloud":
-            if (
-                device["id"]
-                != "cloud-nat"
-            ):
+            if device["id"] != "cloud-nat":
                 errors.append(
                     {
                         "type":
@@ -219,23 +246,14 @@ def build_apply_plan():
                             node["id"],
 
                         "message":
-                            (
-                                "Tipo de cloud "
-                                "ainda nao "
-                                "suportado."
-                            ),
+                            "Tipo de cloud ainda nao suportado.",
                     }
                 )
-
                 continue
 
-
-            default_network = (
-                actual_networks.get(
-                    "default"
-                )
+            default_network = actual_networks.get(
+                "default"
             )
-
 
             if default_network is None:
                 errors.append(
@@ -247,16 +265,10 @@ def build_apply_plan():
                             node["id"],
 
                         "message":
-                            (
-                                "A rede libvirt "
-                                "'default' nao "
-                                "existe."
-                            ),
+                            "A rede libvirt 'default' nao existe.",
                     }
                 )
-
                 continue
-
 
             if not default_network["active"]:
                 errors.append(
@@ -268,16 +280,10 @@ def build_apply_plan():
                             node["id"],
 
                         "message":
-                            (
-                                "A rede libvirt "
-                                "'default' esta "
-                                "inativa."
-                            ),
+                            "A rede libvirt 'default' esta inativa.",
                     }
                 )
-
                 continue
-
 
             actions.append(
                 {
@@ -296,31 +302,119 @@ def build_apply_plan():
 
                     "reason":
                         "cloud-nat",
+
+                    "runtime_ownership":
+                        "shared",
                 }
             )
 
-
-        elif (
-            device["kind"]
-            == "network"
-        ):
-            network_name = (
-                runtime_network_name(
-                    node
+        elif device["kind"] == "network":
+            if is_adopted(node):
+                properties = node.get(
+                    "properties",
+                    {},
                 )
+
+                network_name = properties.get(
+                    "network_name"
+                )
+
+                if not network_name:
+                    errors.append(
+                        {
+                            "type":
+                                "missing-adopted-network",
+
+                            "node_id":
+                                node["id"],
+
+                            "message":
+                                "Network adotada sem network_name.",
+                        }
+                    )
+                    continue
+
+                actual = actual_networks.get(
+                    network_name
+                )
+
+                if actual is None:
+                    errors.append(
+                        {
+                            "type":
+                                "adopted-network-not-found",
+
+                            "node_id":
+                                node["id"],
+
+                            "message":
+                                (
+                                    "Rede adotada nao existe: "
+                                    f"{network_name}"
+                                ),
+                        }
+                    )
+                    continue
+
+                if not actual.get(
+                    "active"
+                ):
+                    errors.append(
+                        {
+                            "type":
+                                "adopted-network-inactive",
+
+                            "node_id":
+                                node["id"],
+
+                            "message":
+                                (
+                                    "Rede adotada esta inativa: "
+                                    f"{network_name}"
+                                ),
+                        }
+                    )
+                    continue
+
+                actions.append(
+                    {
+                        "order": 20,
+                        "action":
+                            "reuse-network",
+
+                        "node_id":
+                            node["id"],
+
+                        "node_name":
+                            node["name"],
+
+                        "libvirt_network":
+                            network_name,
+
+                        "bridge":
+                            actual.get(
+                                "bridge"
+                            ),
+
+                        "reason":
+                            "adopted-network",
+
+                        "runtime_ownership":
+                            "adopted",
+                    }
+                )
+
+                continue
+
+            network_name = runtime_network_name(
+                node
             )
 
-            bridge_name = (
-                runtime_bridge_name(
-                    node
-                )
+            bridge_name = runtime_bridge_name(
+                node
             )
 
-
-            if (
-                network_name
-                in actual_networks
-            ):
+            if network_name in actual_networks:
                 actions.append(
                     {
                         "order": 20,
@@ -338,9 +432,11 @@ def build_apply_plan():
 
                         "bridge":
                             bridge_name,
+
+                        "runtime_ownership":
+                            "managed",
                     }
                 )
-
             else:
                 actions.append(
                     {
@@ -362,9 +458,11 @@ def build_apply_plan():
 
                         "mode":
                             "isolated-l2",
+
+                        "runtime_ownership":
+                            "managed",
                     }
                 )
-
 
     # QEMU / appliances / endpoints.
     for node in nodes:
@@ -375,30 +473,27 @@ def build_apply_plan():
         if device is None:
             continue
 
-
-        if (
-            device.get("runtime")
-            != "qemu"
-        ):
+        if device.get(
+            "runtime"
+        ) != "qemu":
             continue
 
-
-        properties = (
-            node.get(
-                "properties",
-                {},
-            )
+        properties = node.get(
+            "properties",
+            {},
         )
 
-
-        image_id = (
-            properties.get(
-                "image_id"
-            )
+        adopted = is_adopted(
+            node
         )
 
+        image_id = properties.get(
+            "image_id"
+        )
 
         if (
+            not adopted
+            and
             device.get(
                 "image_required"
             )
@@ -419,14 +514,11 @@ def build_apply_plan():
                     "message":
                         (
                             f"{node['name']}: "
-                            "nenhuma imagem "
-                            "selecionada."
+                            "nenhuma imagem selecionada."
                         ),
                 }
             )
-
             continue
-
 
         image = None
 
@@ -446,15 +538,12 @@ def build_apply_plan():
 
                         "message":
                             (
-                                "Imagem nao "
-                                "encontrada: "
+                                "Imagem nao encontrada: "
                                 f"{image_id}"
                             ),
                     }
                 )
-
                 continue
-
 
             if not image.get(
                 "available"
@@ -468,16 +557,10 @@ def build_apply_plan():
                             node["id"],
 
                         "message":
-                            (
-                                "Arquivo da "
-                                "imagem nao "
-                                "esta disponivel."
-                            ),
+                            "Arquivo da imagem nao esta disponivel.",
                     }
                 )
-
                 continue
-
 
             if (
                 node["template_id"]
@@ -495,16 +578,10 @@ def build_apply_plan():
                             node["id"],
 
                         "message":
-                            (
-                                "Imagem nao e "
-                                "compativel com "
-                                "o template."
-                            ),
+                            "Imagem nao e compativel com o template.",
                     }
                 )
-
                 continue
-
 
         interface_count = int(
             properties.get(
@@ -519,7 +596,6 @@ def build_apply_plan():
             )
         )
 
-
         prefix = (
             device.get(
                 "interfaces",
@@ -530,9 +606,7 @@ def build_apply_plan():
             )
         )
 
-
         bindings = []
-
 
         for index in range(
             1,
@@ -542,14 +616,11 @@ def build_apply_plan():
                 f"{prefix}{index}"
             )
 
-            matches = (
-                find_links_for_port(
-                    links,
-                    node["id"],
-                    port_id,
-                )
+            matches = find_links_for_port(
+                links,
+                node["id"],
+                port_id,
             )
-
 
             if len(matches) > 1:
                 errors.append(
@@ -566,14 +637,11 @@ def build_apply_plan():
                         "message":
                             (
                                 f"{node['name']} "
-                                f"{port_id}: "
-                                "mais de um link."
+                                f"{port_id}: mais de um link."
                             ),
                     }
                 )
-
                 continue
-
 
             if not matches:
                 bindings.append(
@@ -588,24 +656,16 @@ def build_apply_plan():
                             None,
                     }
                 )
-
                 continue
 
+            link, peer_id = matches[0]
 
-            link, peer_id = (
-                matches[0]
+            peer_node = nodes_by_id.get(
+                peer_id
             )
-
-            peer_node = (
-                nodes_by_id.get(
-                    peer_id
-                )
-            )
-
 
             if peer_node is None:
                 continue
-
 
             peer_device = get_device(
                 peer_node[
@@ -613,30 +673,15 @@ def build_apply_plan():
                 ]
             )
 
-
             if peer_device is None:
                 continue
 
+            network_name = resolved_network_name(
+                peer_node,
+                peer_device,
+            )
 
-            if (
-                peer_device["kind"]
-                == "cloud"
-            ):
-                network_name = (
-                    "default"
-                )
-
-            elif (
-                peer_device["kind"]
-                == "network"
-            ):
-                network_name = (
-                    runtime_network_name(
-                        peer_node
-                    )
-                )
-
-            else:
+            if not network_name:
                 errors.append(
                     {
                         "type":
@@ -653,19 +698,12 @@ def build_apply_plan():
 
                         "message":
                             (
-                                "Link direto "
-                                "entre dois "
-                                "equipamentos "
-                                "ainda nao e "
-                                "suportado. "
-                                "Use um node "
-                                "Network."
+                                "Link direto entre dois equipamentos "
+                                "ainda nao e suportado. Use Network."
                             ),
                     }
                 )
-
                 continue
-
 
             bindings.append(
                 {
@@ -683,7 +721,6 @@ def build_apply_plan():
                 }
             )
 
-
         unused_ports = [
             binding["port"]
             for binding in bindings
@@ -691,7 +728,6 @@ def build_apply_plan():
                 "connected"
             ]
         ]
-
 
         if unused_ports:
             warnings.append(
@@ -715,30 +751,76 @@ def build_apply_plan():
                 }
             )
 
+        if adopted:
+            domain_name = properties.get(
+                "domain_name"
+            )
 
-        domain_name = (
-            runtime_domain_name(
+            domain_uuid = properties.get(
+                "domain_uuid"
+            )
+
+            if (
+                not domain_name
+                or not domain_uuid
+            ):
+                errors.append(
+                    {
+                        "type":
+                            "invalid-adopted-runtime",
+
+                        "node_id":
+                            node["id"],
+
+                        "message":
+                            (
+                                "Runtime adotado precisa de "
+                                "domain_name e domain_uuid."
+                            ),
+                    }
+                )
+                continue
+
+            if domain_name not in actual_domains:
+                errors.append(
+                    {
+                        "type":
+                            "adopted-domain-not-found",
+
+                        "node_id":
+                            node["id"],
+
+                        "message":
+                            (
+                                "Dominio adotado nao existe: "
+                                f"{domain_name}"
+                            ),
+                    }
+                )
+                continue
+
+            action_type = "reuse-vm"
+
+        else:
+            domain_name = runtime_domain_name(
                 node
             )
-        )
 
+            domain_uuid = None
 
-        domain_exists = (
-            domain_name
-            in actual_domains
-        )
-
+            action_type = (
+                "reuse-vm"
+                if domain_name
+                in actual_domains
+                else "create-vm"
+            )
 
         actions.append(
             {
                 "order": 50,
 
                 "action":
-                    (
-                        "reuse-vm"
-                        if domain_exists
-                        else "create-vm"
-                    ),
+                    action_type,
 
                 "node_id":
                     node["id"],
@@ -752,11 +834,30 @@ def build_apply_plan():
                 "domain_name":
                     domain_name,
 
+                "domain_uuid":
+                    domain_uuid,
+
+                "runtime_provider":
+                    "libvirt",
+
+                "runtime_ownership":
+                    (
+                        "adopted"
+                        if adopted
+                        else "managed"
+                    ),
+
                 "vcpu":
                     int(
                         properties.get(
                             "vcpu",
-                            1,
+                            device.get(
+                                "defaults",
+                                {},
+                            ).get(
+                                "vcpu",
+                                1,
+                            ),
                         )
                     ),
 
@@ -764,7 +865,13 @@ def build_apply_plan():
                     int(
                         properties.get(
                             "memory_mb",
-                            1024,
+                            device.get(
+                                "defaults",
+                                {},
+                            ).get(
+                                "memory_mb",
+                                1024,
+                            ),
                         )
                     ),
 
@@ -799,12 +906,10 @@ def build_apply_plan():
             }
         )
 
-
     actions.sort(
         key=lambda item:
             item["order"]
     )
-
 
     return {
         "lab": LAB_ID,
