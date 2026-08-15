@@ -46,6 +46,7 @@ A v0.1.0 possui:
 - remoção segura de runtime;
 - console serial pelo navegador;
 - Packet Capture;
+- preview dos pacotes capturados na interface;
 - download de PCAP;
 - latência em links;
 - jitter;
@@ -162,7 +163,7 @@ Esta primeira versão ainda possui algumas limitações:
 - Juniper ainda não implementado;
 - sem instalador para máquina limpa;
 - estado do laboratório ainda armazenado em `labs/`;
-- Packet Capture ainda não mostra uma tabela dos pacotes na tela;
+- Packet Capture ainda não possui visualização ao vivo;
 - Netem ainda não possui controle independente por direção;
 - infraestrutura libvirt externa fica escondida do canvas normal.
 

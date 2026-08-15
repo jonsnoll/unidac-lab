@@ -37,6 +37,17 @@ function formatBytes(bytes) {
 }
 
 
+function formatPacketTime(value) {
+  const number = Number(value)
+
+  if (!Number.isFinite(number)) {
+    return '-'
+  }
+
+  return number.toFixed(6)
+}
+
+
 function LinkCaptureModal({
   link,
   onClose,
@@ -57,6 +68,36 @@ function LinkCaptureModal({
 
   const [error, setError] =
     useState('')
+
+  const [
+    previewPackets,
+    setPreviewPackets,
+  ] = useState([])
+
+  const [
+    previewStatus,
+    setPreviewStatus,
+  ] = useState('idle')
+
+  const [
+    previewError,
+    setPreviewError,
+  ] = useState('')
+
+  const [
+    previewReturned,
+    setPreviewReturned,
+  ] = useState(0)
+
+  const [
+    previewTruncated,
+    setPreviewTruncated,
+  ] = useState(false)
+
+  const [
+    previewLimit,
+    setPreviewLimit,
+  ] = useState(100)
 
 
   const [delayMs, setDelayMs] =
@@ -165,11 +206,27 @@ function LinkCaptureModal({
               data.result?.status
               !== 'running'
             ) {
-              setStatus(
+              const nextStatus =
                 data.result
                   ?.status ||
                 'finished'
+
+              setStatus(
+                nextStatus
               )
+
+              if (
+                [
+                  'stopped',
+                  'finished',
+                ].includes(
+                  nextStatus
+                )
+              ) {
+                loadPreview(
+                  captureId
+                )
+              }
             }
 
           } catch {
@@ -190,9 +247,87 @@ function LinkCaptureModal({
   ])
 
 
+  async function loadPreview(
+    targetCaptureId = captureId,
+  ) {
+    if (!targetCaptureId) {
+      return
+    }
+
+    setPreviewStatus('loading')
+    setPreviewError('')
+
+    try {
+      const response = await fetch(
+        `/api/lab/captures/${
+          encodeURIComponent(
+            targetCaptureId
+          )
+        }/preview?limit=${
+          encodeURIComponent(
+            previewLimit
+          )
+        }`
+      )
+
+      const data =
+        await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          errorMessage(data)
+        )
+      }
+
+      const packets =
+        Array.isArray(
+          data.packets
+        )
+          ? data.packets
+          : []
+
+      setPreviewPackets(
+        packets
+      )
+
+      setPreviewReturned(
+        Number(
+          data.returned ||
+          packets.length
+        )
+      )
+
+      setPreviewTruncated(
+        Boolean(
+          data.truncated
+        )
+      )
+
+      setPreviewStatus(
+        'ready'
+      )
+
+    } catch (err) {
+      setPreviewPackets([])
+      setPreviewReturned(0)
+      setPreviewTruncated(false)
+      setPreviewStatus('error')
+      setPreviewError(
+        err.message
+      )
+    }
+  }
+
+
   async function startCapture() {
     setError('')
     setStatus('starting')
+
+    setPreviewPackets([])
+    setPreviewStatus('idle')
+    setPreviewError('')
+    setPreviewReturned(0)
+    setPreviewTruncated(false)
 
     try {
       const response = await fetch(
@@ -275,10 +410,26 @@ function LinkCaptureModal({
         0
       )
 
-      setStatus(
+      const nextStatus =
         data.result?.status ||
         'finished'
+
+      setStatus(
+        nextStatus
       )
+
+      if (
+        [
+          'stopped',
+          'finished',
+        ].includes(
+          nextStatus
+        )
+      ) {
+        await loadPreview(
+          captureId
+        )
+      }
 
     } catch (err) {
       setStatus('running')
@@ -692,17 +843,229 @@ function LinkCaptureModal({
               )}
 
               {finished && (
-                <button
-                  type="button"
-                  className="capture-primary"
-                  onClick={
-                    downloadCapture
-                  }
-                >
-                  Download PCAP
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="capture-secondary"
+                    onClick={() =>
+                      loadPreview(
+                        captureId
+                      )
+                    }
+                    disabled={
+                      previewStatus ===
+                      'loading'
+                    }
+                  >
+                    {
+                      previewStatus ===
+                      'loading'
+                        ? 'Loading Preview...'
+                        : 'Refresh Preview'
+                    }
+                  </button>
+
+                  <button
+                    type="button"
+                    className="capture-primary"
+                    onClick={
+                      downloadCapture
+                    }
+                  >
+                    Download PCAP
+                  </button>
+                </>
               )}
             </div>
+
+
+            {finished && (
+              <div className="packet-preview">
+                <div className="packet-preview-header">
+                  <div>
+                    <strong>
+                      Packet Preview
+                    </strong>
+
+                    <span>
+                      First {
+                        previewLimit
+                      } packets
+                    </span>
+                  </div>
+
+                  {
+                    previewStatus ===
+                    'ready' && (
+                      <div className="packet-preview-summary">
+                        <strong>
+                          {
+                            previewReturned
+                          }
+                        </strong>
+
+                        <span>
+                          packets
+                        </span>
+
+                        {
+                          previewTruncated &&
+                          (
+                            <span className="packet-preview-truncated">
+                              more available
+                            </span>
+                          )
+                        }
+                      </div>
+                    )
+                  }
+                </div>
+
+
+                {
+                  previewStatus ===
+                  'idle' && (
+                    <div className="packet-preview-empty">
+                      Preview will be loaded
+                      after the capture stops.
+                    </div>
+                  )
+                }
+
+
+                {
+                  previewStatus ===
+                  'loading' && (
+                    <div className="packet-preview-empty">
+                      Reading captured
+                      packets...
+                    </div>
+                  )
+                }
+
+
+                {
+                  previewStatus ===
+                  'error' && (
+                    <div className="packet-preview-error">
+                      {
+                        previewError ||
+                        'Could not load preview.'
+                      }
+                    </div>
+                  )
+                }
+
+
+                {
+                  previewStatus ===
+                  'ready' &&
+                  previewPackets.length ===
+                    0 && (
+                    <div className="packet-preview-empty">
+                      No packets were captured.
+                    </div>
+                  )
+                }
+
+
+                {
+                  previewStatus ===
+                  'ready' &&
+                  previewPackets.length >
+                    0 && (
+                    <div className="packet-preview-table-wrap">
+                      <table className="packet-preview-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Time</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Protocol</th>
+                            <th>Length</th>
+                            <th>Info</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {
+                            previewPackets.map(
+                              (packet) => (
+                                <tr
+                                  key={
+                                    `${
+                                      packet.number
+                                    }-${
+                                      packet.time
+                                    }`
+                                  }
+                                >
+                                  <td className="packet-number">
+                                    {
+                                      packet.number
+                                    }
+                                  </td>
+
+                                  <td className="packet-time">
+                                    {
+                                      formatPacketTime(
+                                        packet.time
+                                      )
+                                    }
+                                  </td>
+
+                                  <td>
+                                    <code>
+                                      {
+                                        packet.source ||
+                                        '-'
+                                      }
+                                    </code>
+                                  </td>
+
+                                  <td>
+                                    <code>
+                                      {
+                                        packet.destination ||
+                                        '-'
+                                      }
+                                    </code>
+                                  </td>
+
+                                  <td>
+                                    <span className="packet-protocol">
+                                      {
+                                        packet.protocol ||
+                                        '-'
+                                      }
+                                    </span>
+                                  </td>
+
+                                  <td className="packet-length">
+                                    {
+                                      packet.length ??
+                                      '-'
+                                    }
+                                  </td>
+
+                                  <td className="packet-info">
+                                    {
+                                      packet.info ||
+                                      '-'
+                                    }
+                                  </td>
+                                </tr>
+                              )
+                            )
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                }
+              </div>
+            )}
           </section>
 
 

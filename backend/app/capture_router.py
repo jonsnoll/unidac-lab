@@ -1,6 +1,7 @@
 from fastapi import (
     APIRouter,
     HTTPException,
+    Query,
 )
 from fastapi.responses import (
     FileResponse,
@@ -9,6 +10,7 @@ from fastapi.responses import (
 from app.capture_service import (
     CaptureError,
     get_capture_file,
+    get_capture_preview,
     get_capture_status,
     start_link_capture,
     stop_capture,
@@ -37,6 +39,9 @@ def capture_http_error(
         "capture-running",
     }:
         status_code = 409
+
+    elif error.kind == "capture-parse-error":
+        status_code = 422
 
     elif error.kind == "agent-error":
         status_code = 502
@@ -97,6 +102,29 @@ def capture_status_route(
     try:
         return get_capture_status(
             capture_id
+        )
+
+    except CaptureError as error:
+        capture_http_error(
+            error
+        )
+
+
+@router.get(
+    "/captures/{capture_id}/preview"
+)
+def capture_preview_route(
+    capture_id: str,
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=500,
+    ),
+):
+    try:
+        return get_capture_preview(
+            capture_id,
+            limit=limit,
         )
 
     except CaptureError as error:

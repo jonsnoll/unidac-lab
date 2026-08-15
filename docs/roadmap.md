@@ -33,6 +33,7 @@
 - console serial;
 - Packet Capture;
 - download de PCAP;
+- preview de pacotes capturados;
 - latência;
 - jitter;
 - perda de pacotes;
@@ -52,7 +53,6 @@
 
 ## Próximas evoluções
 
-- preview de pacotes na interface;
 - captura ao vivo;
 - ícones visuais melhores;
 - Cisco;

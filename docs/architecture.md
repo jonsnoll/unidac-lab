@@ -33,6 +33,7 @@ Responsabilidades:
 - lifecycle;
 - console;
 - Packet Capture;
+- preview de pacotes capturados;
 - Netem;
 - visualização do estado dos equipamentos.
 
