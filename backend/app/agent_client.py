@@ -209,3 +209,31 @@ def ensure_vm(spec):
         input_data=spec,
         timeout=300,
     )
+
+
+
+def vm_start(
+    domain_name,
+):
+    return run_agent(
+        "vm-start",
+        domain_name,
+    )
+
+
+def vm_shutdown(
+    domain_name,
+):
+    return run_agent(
+        "vm-shutdown",
+        domain_name,
+    )
+
+
+def vm_restart(
+    domain_name,
+):
+    return run_agent(
+        "vm-restart",
+        domain_name,
+    )
