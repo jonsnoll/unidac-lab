@@ -723,33 +723,22 @@ def build_apply_plan():
         )
 
 
-        if (
+        domain_exists = (
             domain_name
             in actual_domains
-        ):
-            errors.append(
-                {
-                    "type":
-                        "domain-exists",
-
-                    "node_id":
-                        node["id"],
-
-                    "message":
-                        (
-                            "Dominio libvirt "
-                            "ja existe: "
-                            f"{domain_name}"
-                        ),
-                }
-            )
+        )
 
 
         actions.append(
             {
                 "order": 50,
+
                 "action":
-                    "create-vm",
+                    (
+                        "reuse-vm"
+                        if domain_exists
+                        else "create-vm"
+                    ),
 
                 "node_id":
                     node["id"],

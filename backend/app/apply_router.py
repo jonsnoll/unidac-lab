@@ -8,6 +8,10 @@ from app.agent_client import (
 from app.apply_plan_service import (
     build_apply_plan,
 )
+from app.apply_service import (
+    ApplyError,
+    execute_apply,
+)
 
 
 router = APIRouter(
@@ -31,4 +35,34 @@ def get_agent_health():
         raise HTTPException(
             status_code=503,
             detail=str(error),
+        ) from error
+
+
+
+@router.post("/apply")
+def apply_lab():
+    try:
+        return execute_apply()
+
+    except ApplyError as error:
+        status_code = 409
+
+        if error.kind == "agent-error":
+            status_code = 502
+
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "message":
+                    str(error),
+
+                "kind":
+                    error.kind,
+
+                "step":
+                    error.step,
+
+                "plan":
+                    error.plan,
+            },
         ) from error
