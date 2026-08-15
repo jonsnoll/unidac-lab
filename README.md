@@ -7,9 +7,9 @@ A ideia é permitir a criação visual de topologias, semelhante ao
 conceito de plataformas como EVE-NG e PNETLab, porém utilizando
 uma arquitetura própria.
 
-## Versão v0.1.0
+## Versão atual v0.2.0
 
-A `v0.1.0` representa o primeiro MVP funcional do projeto.
+A `v0.2.0` representa a versão estável atual do projeto, evoluindo o MVP `v0.1.0` com Packet Capture Preview.
 
 Esta versão foi desenvolvida e validada no ambiente atual:
 
@@ -29,7 +29,7 @@ Nesta versão ainda não existe autenticação.
 
 ## Recursos disponíveis
 
-A v0.1.0 possui:
+A versão atual possui:
 
 - editor visual de topologia;
 - catálogo de equipamentos;
@@ -70,7 +70,7 @@ Windows aparece no catálogo como:
 
 Coming Soon
 
-e está desabilitado na v0.1.0.
+e está desabilitado na versão atual.
 
 ## Modelo do laboratório
 
@@ -150,9 +150,9 @@ PLATFORM: HEALTHY
 LAB     : RUNNING
 RESULT  : HEALTHY
 
-## Limitações conhecidas da v0.1.0
+## Limitações conhecidas da v0.2.0
 
-Esta primeira versão ainda possui algumas limitações:
+A versão atual ainda possui algumas limitações:
 
 - acesso somente local;
 - sem autenticação;
@@ -182,3 +182,7 @@ docs/roadmap.md
 Checklist da release:
 
 docs/release-v0.1.0.md
+
+Release v0.2.0:
+
+docs/release-v0.2.0.md

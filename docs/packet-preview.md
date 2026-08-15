@@ -72,7 +72,13 @@ A primeira implementacao possui suporte basico para:
 - ICMPv6;
 - DNS;
 - DHCP;
-- flags TCP.
+- flags TCP;
+- STP / IEEE 802.1D;
+- LLDP;
+- LACP / Slow Protocols;
+- CDP;
+- EAPOL / 802.1X;
+- IEEE 802.3 / LLC.
 
 Protocolos Layer 2 ainda nao reconhecidos aparecem como frames
 Ethernet genericos.

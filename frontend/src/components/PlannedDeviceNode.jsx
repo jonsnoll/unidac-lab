@@ -6,6 +6,8 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react'
 
+import DeviceIcon from './DeviceIcon'
+
 import './PlannedDeviceNode.css'
 
 
@@ -94,13 +96,27 @@ function PlannedDeviceNode({
         {stateLabel}
       </div>
 
-      <strong className="planned-device-name">
-        {data.name}
-      </strong>
+      <div className="planned-device-main">
+        <DeviceIcon
+          device={{
+            id: data.deviceId,
+            vendor: data.vendor,
+            category: data.category,
+            kind: data.kind,
+          }}
+          variant="node"
+        />
 
-      <span className="planned-device-template">
-        {data.templateName}
-      </span>
+        <div className="planned-device-copy">
+          <strong className="planned-device-name">
+            {data.name}
+          </strong>
+
+          <span className="planned-device-template">
+            {data.templateName}
+          </span>
+        </div>
+      </div>
 
 
       {infrastructure ? (

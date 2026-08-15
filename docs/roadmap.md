@@ -1,6 +1,6 @@
 # Roadmap do unidac-lab
 
-## Concluído na v0.1.0
+## Concluído até a v0.2.0
 
 ### Interface
 
@@ -51,10 +51,15 @@
 - doctor.sh;
 - smoke.sh.
 
+## Em desenvolvimento após a v0.2.0
+
+- identidade visual por tipo de equipamento;
+- ícones próprios no catálogo e no canvas;
+- reconhecimento básico de protocolos Layer 2 no Packet Preview.
+
 ## Próximas evoluções
 
 - captura ao vivo;
-- ícones visuais melhores;
 - Cisco;
 - Huawei;
 - Juniper;

@@ -171,6 +171,18 @@ function createPlannedNode(
         device?.kind ||
         'vm',
 
+      deviceId:
+        device?.id ||
+        desiredNode.template_id,
+
+      vendor:
+        device?.vendor ||
+        '',
+
+      category:
+        device?.category ||
+        '',
+
       runtime:
         device?.runtime,
 

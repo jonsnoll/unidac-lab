@@ -3,6 +3,8 @@ import {
   useState,
 } from 'react'
 
+import DeviceIcon from './DeviceIcon'
+
 import './DevicePalette.css'
 
 
@@ -12,35 +14,6 @@ function isDeviceDisabled(device) {
     device?.availability ===
       'coming-soon'
   )
-}
-
-
-function getDeviceIcon(device) {
-  if (
-    device.id === 'cloud-nat'
-  ) {
-    return '☁'
-  }
-
-  if (
-    device.id === 'network'
-  ) {
-    return '◇'
-  }
-
-  if (
-    device.category === 'endpoint'
-  ) {
-    return '▣'
-  }
-
-  if (
-    device.vendor === 'fortinet'
-  ) {
-    return '▤'
-  }
-
-  return '▦'
 }
 
 
@@ -123,9 +96,10 @@ function DeviceSection({
               }
             >
               <div className="device-icon">
-                {getDeviceIcon(
-                  device
-                )}
+                <DeviceIcon
+                  device={device}
+                  variant="palette"
+                />
               </div>
 
 

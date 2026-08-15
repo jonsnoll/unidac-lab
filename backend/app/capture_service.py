@@ -319,6 +319,151 @@ def capture_tcp_flags(
     )
 
 
+
+def capture_l2_summary(
+    ethernet,
+    raw_packet,
+):
+    ethernet_type = getattr(
+        ethernet,
+        "type",
+        0,
+    )
+
+    payload = (
+        raw_packet[14:]
+        if len(raw_packet) >= 14
+        else b""
+    )
+
+
+    if ethernet_type == 0x88CC:
+        return (
+            "LLDP",
+            "Link Layer Discovery Protocol",
+        )
+
+
+    if ethernet_type == 0x888E:
+        return (
+            "EAPOL",
+            "802.1X authentication",
+        )
+
+
+    if ethernet_type == 0x8809:
+        subtype = (
+            payload[0]
+            if payload
+            else None
+        )
+
+        labels = {
+            1:
+                "LACP",
+
+            2:
+                "Marker",
+        }
+
+        protocol = labels.get(
+            subtype,
+            "SLOW",
+        )
+
+        info = (
+            "Slow Protocols"
+            if subtype is None
+            else
+            f"Slow Protocols subtype {subtype}"
+        )
+
+        if protocol == "LACP":
+            info = (
+                "Link Aggregation "
+                "Control Protocol"
+            )
+
+        elif protocol == "Marker":
+            info = (
+                "Link Aggregation Marker"
+            )
+
+        return (
+            protocol,
+            info,
+        )
+
+
+    if ethernet_type <= 1500:
+        if (
+            len(payload) >= 3
+            and
+            payload[0] == 0x42
+            and
+            payload[1] == 0x42
+            and
+            payload[2] in {
+                0x03,
+                0x00,
+            }
+        ):
+            return (
+                "STP",
+                "IEEE 802.1D BPDU",
+            )
+
+
+        if (
+            len(payload) >= 8
+            and
+            payload[0:3]
+            == b"\xaa\xaa\x03"
+        ):
+            oui = payload[3:6]
+            protocol_id = int.from_bytes(
+                payload[6:8],
+                "big",
+            )
+
+            if (
+                oui
+                == b"\x00\x00\x0c"
+                and
+                protocol_id
+                == 0x2000
+            ):
+                return (
+                    "CDP",
+                    (
+                        "Cisco Discovery "
+                        "Protocol"
+                    ),
+                )
+
+            return (
+                "SNAP",
+                (
+                    f"OUI "
+                    f"{oui.hex(':')} "
+                    f"PID "
+                    f"0x{protocol_id:04x}"
+                ),
+            )
+
+
+        return (
+            "802.3",
+            (
+                "IEEE 802.3 / LLC "
+                f"frame ({ethernet_type} bytes)"
+            ),
+        )
+
+
+    return None
+
+
 def capture_transport_summary(
     payload,
     protocol_number,
@@ -663,6 +808,31 @@ def capture_packet_summary(
         "type",
         0,
     )
+
+    l2_summary = capture_l2_summary(
+        ethernet,
+        raw_packet,
+    )
+
+    if l2_summary:
+        protocol, info = l2_summary
+
+        return {
+            "source":
+                source_mac,
+
+            "destination":
+                destination_mac,
+
+            "protocol":
+                protocol,
+
+            "length":
+                length,
+
+            "info":
+                info,
+        }
 
     return {
         "source":
