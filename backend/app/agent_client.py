@@ -561,49 +561,131 @@ def _agent_socket_exec(
     return result
 
 
+def _socket_stdin_from_kwargs(
+    kwargs,
+):
+    if not kwargs:
+        return None
+
+
+    stdin_keys = (
+        "input_text",
+        "stdin_data",
+        "stdin",
+        "input",
+        "payload",
+        "spec",
+        "data",
+    )
+
+
+    found = [
+        key
+        for key in stdin_keys
+        if (
+            key in kwargs
+            and kwargs[key] is not None
+        )
+    ]
+
+
+    if len(found) > 1:
+        raise AgentError(
+            "Multiplos parametros de stdin "
+            "foram informados ao Agent."
+        )
+
+
+    if found:
+        value = kwargs[
+            found[0]
+        ]
+
+    else:
+        ignored_keys = {
+            "timeout",
+            "check",
+        }
+
+
+        remaining = {
+            key:
+                value
+            for key, value
+            in kwargs.items()
+            if (
+                key
+                not in ignored_keys
+                and value is not None
+            )
+        }
+
+
+        if len(remaining) == 0:
+            return None
+
+
+        if len(remaining) > 1:
+            raise AgentError(
+                "Parametros nao suportados "
+                "pelo Agent socket: "
+                + ", ".join(
+                    sorted(
+                        remaining
+                    )
+                )
+            )
+
+
+        value = next(
+            iter(
+                remaining.values()
+            )
+        )
+
+
+    if isinstance(
+        value,
+        bytes,
+    ):
+        return value.decode(
+            "utf-8"
+        )
+
+
+    if not isinstance(
+        value,
+        str,
+    ):
+        return _agent_json.dumps(
+            value
+        )
+
+
+    return value
+
+
 def run_agent(
     *args,
     **kwargs,
 ):
-    stdin_data = None
-
-
-    if kwargs:
-        if len(kwargs) != 1:
-            return _run_agent_cli(
-                *args,
-                **kwargs,
-            )
-
-
-        stdin_data = next(
-            iter(
-                kwargs.values()
-            )
-        )
-
-
-    if (
-        stdin_data is not None
-        and
-        not isinstance(
-            stdin_data,
-            str,
-        )
-    ):
-        stdin_data = (
-            _agent_json.dumps(
-                stdin_data
-            )
-        )
-
-
     transport = (
         _agent_os.environ.get(
             "UNIDAC_LAB_AGENT_TRANSPORT",
             _AGENT_TRANSPORT,
         )
     )
+
+
+    if transport not in {
+        "auto",
+        "socket",
+        "cli",
+    }:
+        raise AgentError(
+            "Transport do Agent invalido: "
+            f"{transport}"
+        )
 
 
     if transport == "cli":
@@ -613,12 +695,20 @@ def run_agent(
         )
 
 
+    stdin_data = (
+        _socket_stdin_from_kwargs(
+            kwargs
+        )
+    )
+
+
     try:
         return _agent_socket_exec(
             args,
             stdin_data=
                 stdin_data,
         )
+
 
     except _AgentSocketTransportError:
         if transport == "socket":

@@ -1,0 +1,131 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile:
+        deploy/docker/backend.Dockerfile
+
+    image:
+      unidac-lab-backend:0.1
+
+    container_name:
+      unidac-lab-backend
+
+    network_mode:
+      host
+
+    user:
+      "${UNIDAC_LAB_UID}:${UNIDAC_LAB_PRIMARY_GID}"
+
+    group_add:
+      - "${UNIDAC_LAB_SOCKET_GID}"
+      - "${LIBVIRT_GID}"
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+      UNIDAC_LAB_AGENT_TRANSPORT:
+        socket
+
+      UNIDAC_LAB_AGENT_SOCKET:
+        /run/unidac-lab/agent.sock
+
+    volumes:
+      - type: bind
+        source: ./labs
+        target: /workspace/labs
+
+      - type: bind
+        source: ./images
+        target: /workspace/images
+
+      - type: bind
+        source: ./catalog
+        target: /workspace/catalog
+        read_only: true
+
+      - type: bind
+        source: /run/unidac-lab
+        target: /run/unidac-lab
+        read_only: true
+
+      - type: bind
+        source: /run/libvirt/libvirt-sock-ro
+        target: /run/libvirt/libvirt-sock-ro
+        read_only: true
+
+      - type: bind
+        source: /var/lib/libvirt/images/unidac-lab/captures
+        target: /var/lib/libvirt/images/unidac-lab/captures
+        read_only: true
+
+      - type: bind
+        source: /var/run/netns
+        target: /var/run/netns
+        read_only: true
+
+    cap_drop:
+      - ALL
+
+    init: true
+
+    restart:
+      unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8000/"
+        ]
+
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+
+  frontend:
+    build:
+      context: .
+      dockerfile:
+        deploy/docker/frontend.Dockerfile
+
+    image:
+      unidac-lab-frontend:0.1
+
+    container_name:
+      unidac-lab-frontend
+
+    network_mode:
+      host
+
+    depends_on:
+      backend:
+        condition:
+          service_healthy
+
+    init: true
+
+    restart:
+      unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1/"
+        ]
+
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

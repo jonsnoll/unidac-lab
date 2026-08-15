@@ -67,7 +67,7 @@ function ConsoleModal({
 
     const url =
       `${protocol}://` +
-      `${window.location.hostname}:8000` +
+      `${window.location.host}` +
       `/api/lab/nodes/${
         encodeURIComponent(
           nodeId
