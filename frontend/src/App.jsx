@@ -17,6 +17,7 @@ import {
 import DevicePalette from './components/DevicePalette'
 import NodePropertiesPanel from './components/NodePropertiesPanel'
 import ImageImportModal from './components/ImageImportModal'
+import ApplyPlanModal from './components/ApplyPlanModal'
 import PlannedDeviceNode from './components/PlannedDeviceNode'
 
 import '@xyflow/react/dist/style.css'
@@ -287,6 +288,12 @@ function App() {
   const [
     showImageImport,
     setShowImageImport,
+  ] = useState(false)
+
+
+  const [
+    showApplyPlan,
+    setShowApplyPlan,
   ] = useState(false)
 
 
@@ -1352,6 +1359,19 @@ function App() {
 
 
         <div className="lab-status">
+          <button
+            type="button"
+            className="apply-changes-button"
+            onClick={() =>
+              setShowApplyPlan(
+                true
+              )
+            }
+          >
+            Apply Changes
+          </button>
+
+
           {saveStatus && (
             <span className="save-status">
               {saveStatus}
@@ -1477,6 +1497,17 @@ function App() {
           />
         )}
       </div>
+
+
+      {showApplyPlan && (
+        <ApplyPlanModal
+          onClose={() =>
+            setShowApplyPlan(
+              false
+            )
+          }
+        />
+      )}
 
 
       {showImageImport && (

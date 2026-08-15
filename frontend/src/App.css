@@ -184,3 +184,27 @@ body {
 
   color: #9a6e1f;
 }
+
+.apply-changes-button {
+  padding: 7px 12px;
+
+  border:
+    1px solid #2d7148;
+
+  border-radius: 6px;
+
+  background: #397f54;
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.2px;
+}
+
+.apply-changes-button:hover {
+  background: #2e6e47;
+}
