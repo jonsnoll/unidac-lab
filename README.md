@@ -7,9 +7,9 @@ A ideia é permitir a criação visual de topologias, semelhante ao
 conceito de plataformas como EVE-NG e PNETLab, porém utilizando
 uma arquitetura própria.
 
-## Versão atual v0.2.0
+## Versão atual v0.3.0
 
-A `v0.2.0` representa a versão estável atual do projeto, evoluindo o MVP `v0.1.0` com Packet Capture Preview.
+A `v0.3.0` representa a versão estável atual do projeto. Ela evolui o Packet Capture Preview com identificação básica de protocolos Layer 2 e adiciona identidade visual por tipo de equipamento no catálogo e no canvas.
 
 Esta versão foi desenvolvida e validada no ambiente atual:
 
@@ -33,6 +33,7 @@ A versão atual possui:
 
 - editor visual de topologia;
 - catálogo de equipamentos;
+- ícones visuais por tipo de equipamento;
 - FortiGate virtual;
 - Linux virtual genérico;
 - Internet / NAT;
@@ -47,6 +48,7 @@ A versão atual possui:
 - console serial pelo navegador;
 - Packet Capture;
 - preview dos pacotes capturados na interface;
+- identificação básica de STP, LLDP, LACP, CDP, EAPOL e IEEE 802.3/LLC;
 - download de PCAP;
 - latência em links;
 - jitter;
@@ -150,7 +152,7 @@ PLATFORM: HEALTHY
 LAB     : RUNNING
 RESULT  : HEALTHY
 
-## Limitações conhecidas da v0.2.0
+## Limitações conhecidas da v0.3.0
 
 A versão atual ainda possui algumas limitações:
 
@@ -186,3 +188,7 @@ docs/release-v0.1.0.md
 Release v0.2.0:
 
 docs/release-v0.2.0.md
+
+Release v0.3.0:
+
+docs/release-v0.3.0.md

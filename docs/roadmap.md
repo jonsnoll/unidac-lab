@@ -1,6 +1,6 @@
 # Roadmap do unidac-lab
 
-## Concluído até a v0.2.0
+## Concluído até a v0.3.0
 
 ### Interface
 
@@ -51,11 +51,12 @@
 - doctor.sh;
 - smoke.sh.
 
-## Em desenvolvimento após a v0.2.0
+### Evoluções da v0.3.0
 
 - identidade visual por tipo de equipamento;
 - ícones próprios no catálogo e no canvas;
-- reconhecimento básico de protocolos Layer 2 no Packet Preview.
+- reconhecimento básico de STP, LLDP, LACP, CDP, EAPOL e IEEE 802.3/LLC no Packet Preview;
+- smoke test dedicado ao parser de pacotes.
 
 ## Próximas evoluções
 
