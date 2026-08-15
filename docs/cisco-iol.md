@@ -53,6 +53,28 @@ versionados.
 
 O projeto nao gera nem contorna licencas do IOL.
 
+## Sandbox de compatibilidade
+
+O userspace legado passou a ser preparado em uma imagem Docker
+isolada.
+
+A imagem Cisco nao e incorporada ao container. O binario e
+montado read-only apenas durante validacoes ou execucao futura.
+
+O sandbox usa uma base Linux i386 e recebe somente o pacote
+`libssl1.0.0` legado necessario para resolver a dependencia
+`libcrypto.so.4`. O pacote e obtido do archive oficial do Ubuntu
+e existe somente dentro da imagem do sandbox.
+
+Nao usamos `apt update` da release Trusty. O host Ubuntu 24.04
+continua sem a biblioteca legada.
+
+O sandbox roda sem rede, sem capabilities Linux adicionais e com
+`no-new-privileges` durante o smoke de compatibilidade.
+
+Nesta etapa somente loader e `ldd` sao executados contra a imagem
+Cisco. O IOS nao e iniciado.
+
 ## Fases
 
 1. Host readiness i386.
