@@ -158,3 +158,23 @@ O probe nao le o conteudo de `iourc` e nao executa o IOS.
 
 A finalidade e evitar implementar o provider com flags
 adivinhadas.
+
+## Deep static probe
+
+O primeiro static probe confirmou os principais contratos
+visiveis no binario:
+
+- `Usage: <image> [options] <application id>`;
+- `NETMAP`;
+- `IOURC`;
+- `-L` para console remoto;
+- `-N` para ignorar NETMAP;
+- `-R` para ignorar opcoes do IOURC;
+- `-n` para NVRAM;
+- `-s` para interfaces seriais.
+
+Antes de implementar startup/networking, o deep static probe
+analisa a proximidade fisica dessas strings dentro do ELF.
+
+Isso permite recuperar a tabela de opcoes e pistas de NETMAP
+sem executar o IOS e sem adivinhar flags.
