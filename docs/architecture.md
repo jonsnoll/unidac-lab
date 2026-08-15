@@ -1,121 +1,146 @@
-# unidac-lab Architecture
+# Arquitetura do unidac-lab
 
-## Core model
+## Estados principais
 
-The platform separates three concepts:
+A plataforma trabalha com três conceitos:
 
-- Desired State: what the user designed.
-- Runtime State: what exists in QEMU/libvirt.
-- Workspace State: visual position and layout.
+### Desired State
 
-## Components
+Representa o laboratório que o usuário deseja ter.
 
-### Frontend
+### Runtime / Observed State
 
-React + React Flow.
+Representa os recursos que realmente existem no QEMU/libvirt.
 
-Responsibilities:
+### Workspace State
 
-- topology editor
-- device properties
-- Apply Plan preview
-- lifecycle controls
-- serial console
-- packet capture UI
-- runtime state visualization
+Representa posição e layout visual do canvas.
 
-The frontend never receives privileged host access.
+## Frontend
 
-### Backend
+Tecnologias:
+
+- React
+- React Flow
+- Vite
+
+Responsabilidades:
+
+- editor de topologia;
+- catálogo;
+- propriedades;
+- Apply Plan;
+- lifecycle;
+- console;
+- Packet Capture;
+- Netem;
+- visualização do estado dos equipamentos.
+
+O frontend não possui acesso privilegiado ao host.
+
+## Backend
+
+Tecnologia:
 
 FastAPI.
 
-Responsibilities:
+Responsabilidades:
 
-- Desired State
-- Apply Plan
-- Image Library
-- reconciliation
-- lifecycle APIs
-- WebSocket console transport
-- packet capture orchestration
+- Desired State;
+- Apply Plan;
+- Image Library;
+- reconciliação;
+- lifecycle;
+- console WebSocket;
+- Packet Capture;
+- Netem.
 
-The backend must not run as root.
+O backend roda como usuário não-root.
 
-### Host Agent
+O backend não recebe:
 
-unidac-lab-agent.
+- /dev/kvm;
+- Docker socket;
+- libvirt write socket.
 
-This is the privileged boundary.
+A observação do libvirt pode utilizar o socket read-only.
 
-Responsibilities include:
+## Host Agent
 
-- libvirt network creation
-- runtime image preparation
-- QCOW2 overlays
-- VM creation and validation
-- VM lifecycle
-- runtime removal
-- packet capture
-- future tc/netem operations
+O `unidac-lab-agent` é responsável pelas operações privilegiadas.
 
-The agent only accepts resources inside the
-managed unidac-lab namespace.
+Entre elas:
 
-### Host runtime
+- criação de redes libvirt;
+- preparação de imagens;
+- criação de overlays;
+- criação de VMs;
+- lifecycle;
+- remoção de runtime;
+- Packet Capture;
+- Netem;
+- console serial.
 
-Native Linux host:
+O Agent somente gerencia recursos do namespace do unidac-lab.
 
-- QEMU/KVM
-- libvirt
-- Linux bridges/tap/vnet
-- tcpdump
-- tc/netem
-- runtime images
+## AgentD
 
-## Storage model
+O `unidac-lab-agentd` roda diretamente no host através do systemd.
 
-Base images are read-only.
+Socket:
 
-Each VM gets its own QCOW2 overlay.
+/run/unidac-lab/agent.sock
 
-Removing a runtime VM does not delete its
-overlay by default.
+A unit utiliza:
 
-## Security principles
+RuntimeDirectory=unidac-lab
+RuntimeDirectoryPreserve=yes
 
-- Backend does not run as root.
-- Browser never sends arbitrary host interface
-  names to privileged operations.
-- Managed VM names use the ulab- namespace.
-- Agent must not control external VMs.
-- Runtime image IDs and capture IDs are
-  validated before host operations.
+Isso permite reiniciar o AgentD sem quebrar o bind mount usado
+pelo backend.
 
-## Host Agent transport
+## Redes
 
-The privileged Agent is exposed to the backend
-through a local Unix socket:
+Redes gerenciadas pelo unidac-lab são:
 
-`/run/unidac-lab/agent.sock`
+- persistentes;
+- configuradas com autostart.
 
-`unidac-lab-agentd` runs natively on the host
-under systemd.
+Assim elas retornam automaticamente após reinicialização.
 
-Privileged operations go through agentd:
+## VMs
 
-- VM creation
-- lifecycle
-- runtime removal
-- image/overlay preparation
-- network creation
-- packet capture
-- netem
-- serial console
+As VMs gerenciadas não utilizam autostart na v0.1.0.
 
-For the MVP, libvirt observation may remain
-read-only in the backend through the libvirt
-read-only socket.
+Após reinicialização:
 
-No libvirt write socket is exposed to the
-backend container.
+- redes voltam;
+- VMs permanecem desligadas.
+
+O usuário decide quando ligar os equipamentos.
+
+## Apply
+
+Apply representa reconciliação de configuração.
+
+Para uma VM existente desligada:
+
+Apply não altera seu power state.
+
+O power state é tratado exclusivamente pelo Lifecycle.
+
+## Armazenamento
+
+Imagens base permanecem preservadas.
+
+Cada VM utiliza seu próprio overlay QCOW2.
+
+Atualmente o estado do laboratório fica em:
+
+labs/
+
+Esse diretório não é versionado pelo Git.
+
+Em uma versão futura o runtime poderá ser movido para algo como:
+
+/var/lib/unidac-lab

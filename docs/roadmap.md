@@ -1,34 +1,78 @@
-# unidac-lab Roadmap
+# Roadmap do unidac-lab
 
-## Completed
+## Concluído na v0.1.0
 
-- Visual topology editor
-- Device catalog
-- Image Library
-- FortiGate KVM runtime
-- Generic Linux QEMU runtime
-- Desired State persistence
-- Apply Plan
-- Apply Engine
-- Runtime reconciliation
-- Start / Stop / Restart
-- Safe runtime removal
-- Web serial console
+### Interface
 
-## Current
+- editor visual de topologia;
+- catálogo de equipamentos;
+- propriedades;
+- visualização de estado.
 
-- Packet Capture
+### Runtime
 
-## Next
+- FortiGate KVM;
+- Linux genérico;
+- Internet / NAT;
+- rede Layer 2;
+- Start;
+- Shutdown;
+- Restart;
+- remoção segura.
 
-- Link latency
-- Link jitter
-- Packet loss
-- Bandwidth limiting
-- Host Agent boundary cleanup
-- Docker Compose
-- Multi-Lab
-- Windows runtime
-- Image Manager
-- Cisco / Juniper templates
-- Installer
+### Reconciliação
+
+- Desired State;
+- Workspace State;
+- Apply Plan;
+- Apply Engine;
+- reconciliação de runtime.
+
+### Ferramentas
+
+- console serial;
+- Packet Capture;
+- download de PCAP;
+- latência;
+- jitter;
+- perda de pacotes;
+- limitação de banda.
+
+### Arquitetura
+
+- Host Agent;
+- AgentD;
+- Unix socket;
+- backend não-root;
+- Docker Compose;
+- recuperação de redes após reboot;
+- scripts status.sh;
+- doctor.sh;
+- smoke.sh.
+
+## Próximas evoluções
+
+- preview de pacotes na interface;
+- captura ao vivo;
+- ícones visuais melhores;
+- Cisco;
+- Huawei;
+- Juniper;
+- Windows;
+- autenticação;
+- acesso pela rede;
+- múltiplos laboratórios;
+- instalador;
+- armazenamento em /var/lib/unidac-lab;
+- Netem independente por direção;
+- importação/exportação de labs;
+- templates de laboratórios.
+
+## Futuro
+
+- controle de usuários;
+- quotas;
+- contabilização de recursos;
+- consumo;
+- portal estilo cloud;
+- gerenciamento de ambientes de clientes.
