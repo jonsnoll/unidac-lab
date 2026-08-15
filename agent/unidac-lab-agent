@@ -1025,7 +1025,7 @@ def validate_overlay_for_vm(
         )
 
 
-def build_fortigate_xml(
+def build_qemu_xml(
     domain_name,
     memory_mb,
     vcpu,
@@ -1439,7 +1439,13 @@ def vm_ensure():
         )
 
 
-    if profile != "fortigate-kvm":
+    supported_profiles = {
+        "fortigate-kvm",
+        "generic-qemu",
+    }
+
+
+    if profile not in supported_profiles:
         fail(
             "Perfil ainda nao suportado: "
             f"{profile}"
@@ -1604,7 +1610,7 @@ def vm_ensure():
             return
 
 
-        xml = build_fortigate_xml(
+        xml = build_qemu_xml(
             domain_name,
             memory_mb,
             vcpu,

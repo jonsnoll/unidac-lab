@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "cirros-0-6-3-x86-64",
+  "name": "CirrOS 0.6.3 x86_64",
+  "vendor": "generic",
+  "version": "0.6.3",
+  "kind": "disk-image",
+  "format": "qcow2",
+  "deployment": "qcow2-overlay",
+  "description": "CirrOS Linux bootavel para validacao do runtime generic-qemu.",
+  "compatible_templates": [
+    "generic-linux-vm"
+  ],
+  "storage": {
+    "relative_path": "images/store/generic/cirros-0-6-3-x86-64/base.qcow2",
+    "read_only_base": true
+  },
+  "integrity": {
+    "sha256": "7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b"
+  },
+  "image_info": {
+    "virtual_size_bytes": 117440512,
+    "actual_size_bytes": 21692416
+  }
+}

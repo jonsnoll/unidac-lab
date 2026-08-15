@@ -19,6 +19,9 @@ from app.image_service import (
 SUPPORTED_VM_TEMPLATES = {
     "fortinet-fortigate-vm":
         "fortigate-kvm",
+
+    "generic-linux-vm":
+        "generic-qemu",
 }
 
 
