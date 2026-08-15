@@ -91,3 +91,31 @@ overlay by default.
 - Agent must not control external VMs.
 - Runtime image IDs and capture IDs are
   validated before host operations.
+
+## Host Agent transport
+
+The privileged Agent is exposed to the backend
+through a local Unix socket:
+
+`/run/unidac-lab/agent.sock`
+
+`unidac-lab-agentd` runs natively on the host
+under systemd.
+
+Privileged operations go through agentd:
+
+- VM creation
+- lifecycle
+- runtime removal
+- image/overlay preparation
+- network creation
+- packet capture
+- netem
+- serial console
+
+For the MVP, libvirt observation may remain
+read-only in the backend through the libvirt
+read-only socket.
+
+No libvirt write socket is exposed to the
+backend container.

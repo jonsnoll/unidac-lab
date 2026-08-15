@@ -1,0 +1,22 @@
+[Unit]
+Description=unidac-lab privileged host agent daemon
+After=libvirtd.service
+Requires=libvirtd.service
+
+[Service]
+Type=simple
+User=root
+Group=unidac-lab
+EnvironmentFile=/etc/unidac-lab/agent.env
+ExecStart=/usr/local/libexec/unidac-lab-agentd
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=unidac-lab
+RuntimeDirectoryMode=0770
+UMask=0007
+
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

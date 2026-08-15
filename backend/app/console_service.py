@@ -1,5 +1,4 @@
 import re
-import subprocess
 
 from app.apply_plan_service import (
     build_apply_plan,
@@ -9,10 +8,6 @@ from app.apply_plan_service import (
 DOMAIN_RE = re.compile(
     r"^ulab-[a-z0-9-]{1,59}$"
 )
-
-VIRSH = "/usr/bin/virsh"
-
-LIBVIRT_URI = "qemu:///system"
 
 
 class ConsoleError(RuntimeError):
@@ -68,8 +63,7 @@ def resolve_console_domain(
             raise ConsoleError(
                 "Dominio fora do namespace "
                 "gerenciado.",
-                kind=
-                    "invalid-domain",
+                kind="invalid-domain",
             )
 
 
@@ -79,9 +73,9 @@ def resolve_console_domain(
         ):
             raise ConsoleError(
                 "Runtime ainda nao existe. "
-                "Execute Apply Changes primeiro.",
-                kind=
-                    "runtime-not-created",
+                "Execute Apply Changes "
+                "primeiro.",
+                kind="runtime-not-created",
             )
 
 
@@ -105,58 +99,9 @@ def resolve_console_domain(
     )
 
 
-def get_domain_state(
-    domain_name,
-):
-    process = subprocess.run(
-        [
-            VIRSH,
-            "-c",
-            LIBVIRT_URI,
-            "domstate",
-            domain_name,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-
-
-    if process.returncode != 0:
-        raise ConsoleError(
-            process.stderr.strip()
-            or
-            "Falha consultando VM.",
-            kind="libvirt-error",
-        )
-
-
-    return process.stdout.strip()
-
-
 def ensure_console_ready(
     node_id,
 ):
-    runtime = resolve_console_domain(
+    return resolve_console_domain(
         node_id
     )
-
-    state = get_domain_state(
-        runtime[
-            "domain_name"
-        ]
-    )
-
-
-    if state != "running":
-        raise ConsoleError(
-            "Console disponivel somente "
-            "quando a VM esta running.",
-            kind="vm-not-running",
-        )
-
-
-    runtime["state"] = state
-
-    return runtime

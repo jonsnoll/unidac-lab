@@ -1,0 +1,682 @@
+#!/usr/bin/python3
+
+import errno
+import fcntl
+import grp
+import json
+import os
+import pty
+import re
+import select
+import signal
+import socket
+import struct
+import subprocess
+import termios
+import threading
+from pathlib import Path
+
+
+SOCKET_PATH = Path(
+    os.environ.get(
+        "UNIDAC_LAB_AGENT_SOCKET",
+        "/run/unidac-lab/agent.sock",
+    )
+)
+
+AGENT_PATH = os.environ.get(
+    "UNIDAC_LAB_AGENT_PATH",
+    "/usr/local/libexec/"
+    "unidac-lab-agent",
+)
+
+SOCKET_GROUP = os.environ.get(
+    "UNIDAC_LAB_SOCKET_GROUP",
+    "unidac-lab",
+)
+
+LIBVIRT_URI = "qemu:///system"
+
+VIRSH = "/usr/bin/virsh"
+
+MAX_REQUEST_BYTES = (
+    4 * 1024 * 1024
+)
+
+DOMAIN_RE = re.compile(
+    r"^ulab-[a-z0-9]"
+    r"[a-z0-9-]{1,62}$"
+)
+
+
+ALLOWED_COMMANDS = {
+    "health",
+    "network-ensure",
+    "image-ensure",
+    "overlay-ensure",
+    "vm-ensure",
+    "vm-start",
+    "vm-shutdown",
+    "vm-restart",
+    "vm-undefine",
+    "capture-start",
+    "capture-stop",
+    "capture-status",
+    "link-netem-set",
+    "link-netem-clear",
+    "link-netem-status",
+}
+
+
+def log(message):
+    print(
+        f"[unidac-lab-agentd] "
+        f"{message}",
+        flush=True,
+    )
+
+
+def send_json(
+    connection,
+    data,
+):
+    payload = (
+        json.dumps(
+            data,
+            separators=(
+                ",",
+                ":",
+            ),
+        )
+        + "\n"
+    ).encode(
+        "utf-8"
+    )
+
+    connection.sendall(
+        payload
+    )
+
+
+def receive_request(
+    connection,
+):
+    data = bytearray()
+
+    while True:
+        chunk = connection.recv(
+            4096
+        )
+
+        if not chunk:
+            raise RuntimeError(
+                "Conexao encerrada "
+                "antes do request."
+            )
+
+        data.extend(
+            chunk
+        )
+
+        if len(data) > MAX_REQUEST_BYTES:
+            raise RuntimeError(
+                "Request excede limite."
+            )
+
+        if b"\n" in data:
+            line, _unused = (
+                bytes(data).split(
+                    b"\n",
+                    1,
+                )
+            )
+
+            break
+
+    try:
+        request = json.loads(
+            line.decode(
+                "utf-8"
+            )
+        )
+
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as error:
+        raise RuntimeError(
+            f"JSON invalido: {error}"
+        ) from error
+
+    if not isinstance(
+        request,
+        dict,
+    ):
+        raise RuntimeError(
+            "Request precisa ser "
+            "objeto JSON."
+        )
+
+    return request
+
+
+def handle_exec(
+    connection,
+    request,
+):
+    argv = request.get(
+        "argv"
+    )
+
+    stdin_data = request.get(
+        "stdin"
+    )
+
+
+    if (
+        not isinstance(
+            argv,
+            list,
+        )
+        or
+        not argv
+    ):
+        raise RuntimeError(
+            "argv invalido."
+        )
+
+
+    if len(argv) > 32:
+        raise RuntimeError(
+            "Quantidade de argumentos "
+            "excedeu limite."
+        )
+
+
+    normalized = []
+
+    for item in argv:
+        if not isinstance(
+            item,
+            (
+                str,
+                int,
+                float,
+            ),
+        ):
+            raise RuntimeError(
+                "Argumento invalido."
+            )
+
+        value = str(
+            item
+        )
+
+        if len(value) > 8192:
+            raise RuntimeError(
+                "Argumento excedeu limite."
+            )
+
+        normalized.append(
+            value
+        )
+
+
+    command = normalized[0]
+
+
+    if (
+        command
+        not in
+        ALLOWED_COMMANDS
+    ):
+        raise RuntimeError(
+            "Comando nao permitido: "
+            f"{command}"
+        )
+
+
+    if (
+        stdin_data is not None
+        and
+        not isinstance(
+            stdin_data,
+            str,
+        )
+    ):
+        stdin_data = json.dumps(
+            stdin_data
+        )
+
+
+    process = subprocess.run(
+        [
+            AGENT_PATH,
+            *normalized,
+        ],
+        input=stdin_data,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
+        env=os.environ.copy(),
+    )
+
+
+    send_json(
+        connection,
+        {
+            "ok":
+                True,
+
+            "returncode":
+                process.returncode,
+
+            "stdout":
+                process.stdout,
+
+            "stderr":
+                process.stderr,
+        },
+    )
+
+
+def validate_console_domain(
+    domain_name,
+):
+    if not DOMAIN_RE.fullmatch(
+        domain_name or ""
+    ):
+        raise RuntimeError(
+            "Dominio fora do namespace "
+            "gerenciado."
+        )
+
+
+    process = subprocess.run(
+        [
+            VIRSH,
+            "-c",
+            LIBVIRT_URI,
+            "domstate",
+            domain_name,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+
+    if process.returncode != 0:
+        raise RuntimeError(
+            process.stderr.strip()
+            or
+            "Dominio nao encontrado."
+        )
+
+
+    state = (
+        process.stdout
+        .strip()
+        .lower()
+    )
+
+
+    if state != "running":
+        raise RuntimeError(
+            "Console disponivel somente "
+            "com VM running. "
+            f"Estado atual: {state}"
+        )
+
+
+def handle_console(
+    connection,
+    request,
+):
+    domain_name = request.get(
+        "domain"
+    )
+
+    validate_console_domain(
+        domain_name
+    )
+
+
+    master_fd = None
+    slave_fd = None
+    process = None
+
+
+    try:
+        master_fd, slave_fd = (
+            pty.openpty()
+        )
+
+
+        window_size = struct.pack(
+            "HHHH",
+            40,
+            120,
+            0,
+            0,
+        )
+
+
+        fcntl.ioctl(
+            master_fd,
+            termios.TIOCSWINSZ,
+            window_size,
+        )
+
+
+        process = subprocess.Popen(
+            [
+                VIRSH,
+                "-c",
+                LIBVIRT_URI,
+                "console",
+                "--force",
+                domain_name,
+            ],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            start_new_session=True,
+            close_fds=True,
+        )
+
+
+        os.close(
+            slave_fd
+        )
+
+        slave_fd = None
+
+
+        send_json(
+            connection,
+            {
+                "ok":
+                    True,
+
+                "mode":
+                    "console",
+
+                "domain":
+                    domain_name,
+            },
+        )
+
+
+        while True:
+            readable, _, _ = (
+                select.select(
+                    [
+                        connection,
+                        master_fd,
+                    ],
+                    [],
+                    [],
+                    0.5,
+                )
+            )
+
+
+            if connection in readable:
+                data = connection.recv(
+                    4096
+                )
+
+                if not data:
+                    break
+
+                try:
+                    os.write(
+                        master_fd,
+                        data,
+                    )
+
+                except OSError:
+                    break
+
+
+            if master_fd in readable:
+                try:
+                    data = os.read(
+                        master_fd,
+                        4096,
+                    )
+
+                except OSError as error:
+                    if error.errno in {
+                        errno.EIO,
+                        errno.EBADF,
+                    }:
+                        break
+
+                    raise
+
+
+                if not data:
+                    break
+
+
+                try:
+                    connection.sendall(
+                        data
+                    )
+
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                ):
+                    break
+
+
+            if (
+                process.poll()
+                is not None
+            ):
+                break
+
+
+    finally:
+        if slave_fd is not None:
+            try:
+                os.close(
+                    slave_fd
+                )
+
+            except OSError:
+                pass
+
+
+        if master_fd is not None:
+            try:
+                os.close(
+                    master_fd
+                )
+
+            except OSError:
+                pass
+
+
+        if (
+            process is not None
+            and
+            process.poll() is None
+        ):
+            try:
+                process.terminate()
+
+                process.wait(
+                    timeout=2
+                )
+
+            except Exception:
+                try:
+                    process.kill()
+
+                except Exception:
+                    pass
+
+
+def handle_client(
+    connection,
+):
+    try:
+        request = receive_request(
+            connection
+        )
+
+        mode = request.get(
+            "mode",
+            "exec",
+        )
+
+
+        if mode == "exec":
+            handle_exec(
+                connection,
+                request,
+            )
+
+        elif mode == "console":
+            handle_console(
+                connection,
+                request,
+            )
+
+        else:
+            raise RuntimeError(
+                f"Modo nao permitido: "
+                f"{mode}"
+            )
+
+
+    except Exception as error:
+        try:
+            send_json(
+                connection,
+                {
+                    "ok":
+                        False,
+
+                    "error":
+                        str(error),
+                },
+            )
+
+        except Exception:
+            pass
+
+
+    finally:
+        try:
+            connection.close()
+
+        except Exception:
+            pass
+
+
+def prepare_socket():
+    SOCKET_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+
+    if SOCKET_PATH.exists():
+        SOCKET_PATH.unlink()
+
+
+    server = socket.socket(
+        socket.AF_UNIX,
+        socket.SOCK_STREAM,
+    )
+
+
+    server.bind(
+        str(
+            SOCKET_PATH
+        )
+    )
+
+
+    gid = grp.getgrnam(
+        SOCKET_GROUP
+    ).gr_gid
+
+
+    os.chown(
+        SOCKET_PATH,
+        0,
+        gid,
+    )
+
+    os.chmod(
+        SOCKET_PATH,
+        0o660,
+    )
+
+
+    server.listen(
+        64
+    )
+
+
+    return server
+
+
+def main():
+    if os.geteuid() != 0:
+        raise SystemExit(
+            "agentd precisa rodar "
+            "como root."
+        )
+
+
+    server = prepare_socket()
+
+
+    log(
+        f"listening on "
+        f"{SOCKET_PATH}"
+    )
+
+
+    try:
+        while True:
+            connection, _ = (
+                server.accept()
+            )
+
+            thread = threading.Thread(
+                target=handle_client,
+                args=(
+                    connection,
+                ),
+                daemon=True,
+            )
+
+            thread.start()
+
+
+    except KeyboardInterrupt:
+        pass
+
+
+    finally:
+        server.close()
+
+        try:
+            SOCKET_PATH.unlink()
+
+        except FileNotFoundError:
+            pass
+
+
+if __name__ == "__main__":
+    main()

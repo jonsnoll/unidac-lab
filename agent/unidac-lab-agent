@@ -14,8 +14,11 @@ import libvirt
 
 
 PROJECT_ROOT = Path(
-    "/home/felipe/unidac-lab"
-)
+    os.environ.get(
+        "UNIDAC_LAB_PROJECT_ROOT",
+        "/home/felipe/unidac-lab",
+    )
+).resolve()
 
 PROJECT_IMAGE_STORE = (
     PROJECT_ROOT

@@ -1,10 +1,4 @@
 import asyncio
-import fcntl
-import os
-import pty
-import struct
-import subprocess
-import termios
 
 from fastapi import (
     APIRouter,
@@ -12,10 +6,12 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
+from app.agent_client import (
+    AgentError,
+    open_console_socket,
+)
 from app.console_service import (
     ConsoleError,
-    LIBVIRT_URI,
-    VIRSH,
     ensure_console_ready,
 )
 
@@ -26,15 +22,14 @@ router = APIRouter(
 )
 
 
-async def read_pty(
+async def socket_to_websocket(
     websocket,
-    master_fd,
+    agent_socket,
 ):
     while True:
         try:
             data = await asyncio.to_thread(
-                os.read,
-                master_fd,
+                agent_socket.recv,
                 4096,
             )
 
@@ -46,30 +41,27 @@ async def read_pty(
             return
 
 
-        text = data.decode(
-            "utf-8",
-            errors="replace",
-        )
-
-
         await websocket.send_text(
-            text
+            data.decode(
+                "utf-8",
+                errors="replace",
+            )
         )
 
 
-async def write_pty(
+async def websocket_to_socket(
     websocket,
-    master_fd,
+    agent_socket,
 ):
     while True:
-        message = (
+        text = (
             await websocket.receive_text()
         )
 
+
         await asyncio.to_thread(
-            os.write,
-            master_fd,
-            message.encode(
+            agent_socket.sendall,
+            text.encode(
                 "utf-8"
             ),
         )
@@ -84,10 +76,7 @@ async def vm_console(
 ):
     await websocket.accept()
 
-
-    process = None
-    master_fd = None
-    slave_fd = None
+    agent_socket = None
 
 
     try:
@@ -98,7 +87,20 @@ async def vm_console(
                 )
             )
 
-        except ConsoleError as error:
+            agent_socket = (
+                await asyncio.to_thread(
+                    open_console_socket,
+                    runtime[
+                        "domain_name"
+                    ],
+                )
+            )
+
+        except (
+            ConsoleError,
+            AgentError,
+            OSError,
+        ) as error:
             await websocket.send_text(
                 "\r\n"
                 "[console error] "
@@ -112,74 +114,25 @@ async def vm_console(
             return
 
 
-        domain_name = runtime[
-            "domain_name"
-        ]
-
-
-        master_fd, slave_fd = (
-            pty.openpty()
-        )
-
-
-        window_size = struct.pack(
-            "HHHH",
-            40,
-            120,
-            0,
-            0,
-        )
-
-
-        fcntl.ioctl(
-            master_fd,
-            termios.TIOCSWINSZ,
-            window_size,
-        )
-
-
-        process = subprocess.Popen(
-            [
-                VIRSH,
-                "-c",
-                LIBVIRT_URI,
-                "console",
-                "--force",
-                domain_name,
-            ],
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            start_new_session=True,
-            close_fds=True,
-        )
-
-
-        os.close(
-            slave_fd
-        )
-
-        slave_fd = None
-
-
         await websocket.send_text(
             "\r\n"
-            "[unidac-lab console] "
-            f"{domain_name}\r\n"
+            "[unidac-lab console/agentd] "
+            f"{runtime['domain_name']}"
+            "\r\n"
         )
 
 
         reader = asyncio.create_task(
-            read_pty(
+            socket_to_websocket(
                 websocket,
-                master_fd,
+                agent_socket,
             )
         )
 
         writer = asyncio.create_task(
-            write_pty(
+            websocket_to_socket(
                 websocket,
-                master_fd,
+                agent_socket,
             )
         )
 
@@ -209,51 +162,19 @@ async def vm_console(
     except WebSocketDisconnect:
         pass
 
-    except Exception as error:
-        try:
-            await websocket.send_text(
-                "\r\n"
-                "[console error] "
-                f"{error}\r\n"
-            )
-
-        except Exception:
-            pass
-
 
     finally:
-        if slave_fd is not None:
+        if agent_socket is not None:
             try:
-                os.close(
-                    slave_fd
+                agent_socket.shutdown(
+                    2
                 )
 
             except OSError:
                 pass
 
-
-        if master_fd is not None:
             try:
-                os.close(
-                    master_fd
-                )
+                agent_socket.close()
 
             except OSError:
                 pass
-
-
-        if (
-            process is not None
-            and
-            process.poll() is None
-        ):
-            process.terminate()
-
-            try:
-                process.wait(
-                    timeout=2
-                )
-
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
