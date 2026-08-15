@@ -178,3 +178,78 @@ analisa a proximidade fisica dessas strings dentro do ELF.
 
 Isso permite recuperar a tabela de opcoes e pistas de NETMAP
 sem executar o IOS e sem adivinhar flags.
+
+## Runtime plumbing
+
+O deep static probe confirmou o contrato de linha de comando do
+IOL L2 analisado.
+
+O provider passa a usar o mesmo modelo estrutural comprovado pelo
+ecossistema open-source do GNS3:
+
+- application ID unico;
+- `-e` em grupos de quatro portas Ethernet;
+- `-s 0` para o switch L2 sem interfaces seriais;
+- NETMAP local;
+- uBridge `iol_bridge`;
+- stdin/stdout como console.
+
+Para 8 portas do unidac-lab:
+
+- `port1` = bay 0 / unit 0;
+- `port2` = bay 0 / unit 1;
+- `port3` = bay 0 / unit 2;
+- `port4` = bay 0 / unit 3;
+- `port5` = bay 1 / unit 0;
+- `port6` = bay 1 / unit 1;
+- `port7` = bay 1 / unit 2;
+- `port8` = bay 1 / unit 3.
+
+## Private compatibility library
+
+O container de compatibilidade continua existindo como smoke
+isolado.
+
+Para o runtime real, `libcrypto.so.4` nao e instalada
+globalmente. A biblioteca fica em:
+
+`/opt/unidac-lab/iol-compat/lib`
+
+O processo IOL recebe esse caminho somente por
+`LD_LIBRARY_PATH`.
+
+Isso permite executar o IOL no namespace Linux do host, que e
+necessario para o NETMAP/uBridge, sem contaminar as bibliotecas
+globais do Ubuntu 24.04.
+
+## uBridge
+
+O unidac-lab usa uBridge para adaptar as portas NETMAP do IOL a
+NIO UDP e, futuramente, aos bridges Linux do laboratorio.
+
+O commit instalado e registrado em:
+
+`runtime/iol/ubridge.lock.json`
+
+## Lifecycle contract
+
+O provider agora possui o contrato:
+
+- `prepare`;
+- `start-plan`;
+- `status`;
+- `start`;
+- `stop`;
+- `list`;
+- `inspect`;
+- `remove-prepared`;
+- `ubridge-self-test`.
+
+O comando `start` existe, mas permanece protegido pelo license
+gate.
+
+Sem um `iourc` autorizado em `/etc/unidac-lab/iol/iourc`, o
+provider recusa iniciar o processo Cisco.
+
+O unidac-lab nao gera chaves, nao altera uma chave e nao tenta
+contornar a verificacao do executavel.

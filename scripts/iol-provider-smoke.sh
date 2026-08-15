@@ -38,17 +38,37 @@ if data.get("provider") != "iol":
         "Provider mismatch"
     )
 
-if (
+sandbox = data.get(
+    "sandbox_compatibility",
     data.get(
         "compatibility",
         {},
-    ).get(
+    ),
+)
+
+if (
+    sandbox.get(
         "status"
     )
     != "pass"
 ):
     raise SystemExit(
-        "Compatibility did not pass"
+        "Sandbox compatibility did not pass"
+    )
+
+private = data.get(
+    "private_compatibility"
+)
+
+if (
+    private is not None
+    and private.get(
+        "status"
+    )
+    != "pass"
+):
+    raise SystemExit(
+        "Private compatibility did not pass"
     )
 
 if data.get("startup_allowed") is not False:

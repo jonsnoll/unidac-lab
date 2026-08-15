@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "component": "GNS3 uBridge",
+  "repository": "https://github.com/GNS3/ubridge.git",
+  "commit": "9359c6a595c05ccd9293cc4abd41205ada9b8ee4",
+  "installed_path": "/usr/local/bin/ubridge",
+  "purpose": "IOL NETMAP/NIO bridge provider"
+}
