@@ -2675,6 +2675,497 @@ def capture_stop(
     )
 
 
+
+def validate_netem_values(
+    delay_ms,
+    jitter_ms,
+    loss_pct,
+    rate_mbit,
+):
+    try:
+        delay_ms = int(
+            delay_ms
+        )
+
+        jitter_ms = int(
+            jitter_ms
+        )
+
+        loss_pct = float(
+            loss_pct
+        )
+
+        rate_mbit = int(
+            rate_mbit
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        fail(
+            "Parametros Netem invalidos."
+        )
+
+
+    if not 0 <= delay_ms <= 5000:
+        fail(
+            "Delay fora do limite "
+            "0..5000 ms."
+        )
+
+
+    if not 0 <= jitter_ms <= 5000:
+        fail(
+            "Jitter fora do limite "
+            "0..5000 ms."
+        )
+
+
+    if (
+        jitter_ms > 0
+        and delay_ms == 0
+    ):
+        fail(
+            "Jitter exige delay maior "
+            "que zero."
+        )
+
+
+    if not 0 <= loss_pct <= 100:
+        fail(
+            "Loss fora do limite "
+            "0..100%."
+        )
+
+
+    if not 0 <= rate_mbit <= 100000:
+        fail(
+            "Bandwidth fora do limite "
+            "0..100000 Mbit."
+        )
+
+
+    return {
+        "delay_ms":
+            delay_ms,
+
+        "jitter_ms":
+            jitter_ms,
+
+        "loss_pct":
+            loss_pct,
+
+        "rate_mbit":
+            rate_mbit,
+    }
+
+
+def get_tc_binary():
+    import shutil
+
+    tc = shutil.which(
+        "tc"
+    )
+
+    if not tc:
+        fail(
+            "tc nao encontrado."
+        )
+
+    return tc
+
+
+def tc_qdisc_text(
+    interface_name,
+):
+    tc = get_tc_binary()
+
+
+    process = subprocess.run(
+        [
+            tc,
+            "qdisc",
+            "show",
+            "dev",
+            interface_name,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+
+    if process.returncode != 0:
+        fail(
+            "Falha consultando qdisc: "
+            + (
+                process.stderr.strip()
+                or
+                process.stdout.strip()
+            )
+        )
+
+
+    return (
+        process.stdout.strip()
+    )
+
+
+def resolve_netem_interface(
+    domain_name,
+    port_name,
+    network_name,
+):
+    conn = get_connection()
+
+    try:
+        return resolve_capture_interface(
+            conn,
+            domain_name,
+            port_name,
+            network_name,
+        )
+
+    finally:
+        conn.close()
+
+
+def link_netem_status(
+    domain_name,
+    port_name,
+    network_name,
+):
+    require_root()
+
+    runtime = resolve_netem_interface(
+        domain_name,
+        port_name,
+        network_name,
+    )
+
+
+    qdisc = tc_qdisc_text(
+        runtime["interface"]
+    )
+
+
+    enabled = (
+        " netem " in
+        f" {qdisc} "
+    )
+
+
+    output(
+        {
+            "status":
+                "active"
+                if enabled
+                else "clear",
+
+            "enabled":
+                enabled,
+
+            "domain":
+                domain_name,
+
+            "port":
+                port_name,
+
+            "network":
+                network_name,
+
+            "interface":
+                runtime[
+                    "interface"
+                ],
+
+            "qdisc":
+                qdisc,
+        }
+    )
+
+
+def link_netem_clear(
+    domain_name,
+    port_name,
+    network_name,
+):
+    require_root()
+
+    runtime = resolve_netem_interface(
+        domain_name,
+        port_name,
+        network_name,
+    )
+
+
+    current = tc_qdisc_text(
+        runtime["interface"]
+    )
+
+
+    if " netem " not in (
+        f" {current} "
+    ):
+        output(
+            {
+                "status":
+                    "clear",
+
+                "changed":
+                    False,
+
+                "domain":
+                    domain_name,
+
+                "port":
+                    port_name,
+
+                "network":
+                    network_name,
+
+                "interface":
+                    runtime[
+                        "interface"
+                    ],
+
+                "qdisc":
+                    current,
+            }
+        )
+
+        return
+
+
+    tc = get_tc_binary()
+
+
+    process = subprocess.run(
+        [
+            tc,
+            "qdisc",
+            "del",
+            "dev",
+            runtime[
+                "interface"
+            ],
+            "root",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+
+    if process.returncode != 0:
+        fail(
+            "Falha removendo Netem: "
+            + (
+                process.stderr.strip()
+                or
+                process.stdout.strip()
+            )
+        )
+
+
+    output(
+        {
+            "status":
+                "clear",
+
+            "changed":
+                True,
+
+            "domain":
+                domain_name,
+
+            "port":
+                port_name,
+
+            "network":
+                network_name,
+
+            "interface":
+                runtime[
+                    "interface"
+                ],
+
+            "qdisc":
+                tc_qdisc_text(
+                    runtime[
+                        "interface"
+                    ]
+                ),
+        }
+    )
+
+
+def link_netem_set(
+    domain_name,
+    port_name,
+    network_name,
+    delay_ms,
+    jitter_ms,
+    loss_pct,
+    rate_mbit,
+):
+    require_root()
+
+    values = validate_netem_values(
+        delay_ms,
+        jitter_ms,
+        loss_pct,
+        rate_mbit,
+    )
+
+
+    if (
+        values["delay_ms"] == 0
+        and
+        values["jitter_ms"] == 0
+        and
+        values["loss_pct"] == 0
+        and
+        values["rate_mbit"] == 0
+    ):
+        link_netem_clear(
+            domain_name,
+            port_name,
+            network_name,
+        )
+
+        return
+
+
+    runtime = resolve_netem_interface(
+        domain_name,
+        port_name,
+        network_name,
+    )
+
+
+    command = [
+        get_tc_binary(),
+        "qdisc",
+        "replace",
+        "dev",
+        runtime[
+            "interface"
+        ],
+        "root",
+        "netem",
+    ]
+
+
+    if values["delay_ms"] > 0:
+        command.extend(
+            [
+                "delay",
+                f'{values["delay_ms"]}ms',
+            ]
+        )
+
+        if values[
+            "jitter_ms"
+        ] > 0:
+            command.append(
+                f'{values["jitter_ms"]}ms'
+            )
+
+
+    if values["loss_pct"] > 0:
+        command.extend(
+            [
+                "loss",
+                f'{values["loss_pct"]}%',
+            ]
+        )
+
+
+    if values["rate_mbit"] > 0:
+        command.extend(
+            [
+                "rate",
+                f'{values["rate_mbit"]}mbit',
+            ]
+        )
+
+
+    process = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+
+    if process.returncode != 0:
+        fail(
+            "Falha configurando Netem: "
+            + (
+                process.stderr.strip()
+                or
+                process.stdout.strip()
+            )
+        )
+
+
+    output(
+        {
+            "status":
+                "active",
+
+            "enabled":
+                True,
+
+            "domain":
+                domain_name,
+
+            "port":
+                port_name,
+
+            "network":
+                network_name,
+
+            "interface":
+                runtime[
+                    "interface"
+                ],
+
+            "delay_ms":
+                values[
+                    "delay_ms"
+                ],
+
+            "jitter_ms":
+                values[
+                    "jitter_ms"
+                ],
+
+            "loss_pct":
+                values[
+                    "loss_pct"
+                ],
+
+            "rate_mbit":
+                values[
+                    "rate_mbit"
+                ],
+
+            "qdisc":
+                tc_qdisc_text(
+                    runtime[
+                        "interface"
+                    ]
+                ),
+        }
+    )
+
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -2847,6 +3338,60 @@ def main():
 
         capture_status(
             sys.argv[2]
+        )
+
+        return
+
+
+    if command == "link-netem-set":
+        if len(sys.argv) != 9:
+            fail(
+                "Uso: link-netem-set "
+                "<domain> <port> <network> "
+                "<delay-ms> <jitter-ms> "
+                "<loss-pct> <rate-mbit>"
+            )
+
+        link_netem_set(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+            sys.argv[6],
+            sys.argv[7],
+            sys.argv[8],
+        )
+
+        return
+
+
+    if command == "link-netem-clear":
+        if len(sys.argv) != 5:
+            fail(
+                "Uso: link-netem-clear "
+                "<domain> <port> <network>"
+            )
+
+        link_netem_clear(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+        )
+
+        return
+
+
+    if command == "link-netem-status":
+        if len(sys.argv) != 5:
+            fail(
+                "Uso: link-netem-status "
+                "<domain> <port> <network>"
+            )
+
+        link_netem_status(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
         )
 
         return

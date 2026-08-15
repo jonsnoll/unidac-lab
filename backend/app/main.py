@@ -1,3 +1,4 @@
+from app.link_impairment_router import router as link_impairment_router
 from app.capture_router import router as capture_router
 from app.console_router import router as console_router
 import subprocess
@@ -211,3 +212,4 @@ from app.apply_router import router as apply_router
 app.include_router(apply_router)
 app.include_router(console_router)
 app.include_router(capture_router)
+app.include_router(link_impairment_router)

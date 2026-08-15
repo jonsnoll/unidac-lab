@@ -279,3 +279,50 @@ def capture_status(
         "capture-status",
         capture_id,
     )
+
+
+def link_netem_set(
+    domain_name,
+    port_name,
+    network_name,
+    delay_ms,
+    jitter_ms,
+    loss_pct,
+    rate_mbit,
+):
+    return run_agent(
+        "link-netem-set",
+        domain_name,
+        port_name,
+        network_name,
+        delay_ms,
+        jitter_ms,
+        loss_pct,
+        rate_mbit,
+    )
+
+
+def link_netem_clear(
+    domain_name,
+    port_name,
+    network_name,
+):
+    return run_agent(
+        "link-netem-clear",
+        domain_name,
+        port_name,
+        network_name,
+    )
+
+
+def link_netem_status(
+    domain_name,
+    port_name,
+    network_name,
+):
+    return run_agent(
+        "link-netem-status",
+        domain_name,
+        port_name,
+        network_name,
+    )

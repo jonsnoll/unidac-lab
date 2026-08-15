@@ -210,3 +210,136 @@
   background: #ffffff;
   color: #59635e;
 }
+
+
+.link-tools-modal {
+  width: 620px;
+}
+
+
+.link-tool-section {
+  padding: 13px;
+
+  border: 1px solid #e0e4e1;
+  border-radius: 7px;
+
+  background: #fafbfa;
+}
+
+
+.link-tool-section + .link-tool-section {
+  margin-top: 14px;
+}
+
+
+.link-tool-section h3 {
+  margin:
+    0 0 12px;
+
+  font-size: 10px;
+  letter-spacing: 0.7px;
+
+  text-transform: uppercase;
+
+  color: #707a74;
+}
+
+
+.impairment-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 12px;
+}
+
+
+.impairment-status span {
+  font-size: 9px;
+  color: #818984;
+}
+
+
+.impairment-status strong {
+  font-size: 10px;
+}
+
+
+.impairment-status strong.active {
+  color: #35794c;
+}
+
+
+.impairment-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, 1fr);
+
+  gap: 10px;
+}
+
+
+.impairment-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  font-size: 9px;
+  font-weight: 600;
+
+  color: #68716c;
+}
+
+
+.impairment-grid input {
+  padding: 8px 9px;
+
+  border: 1px solid #d4d9d6;
+  border-radius: 5px;
+
+  font-size: 11px;
+}
+
+
+.impairment-actions,
+.capture-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+
+  margin-top: 12px;
+}
+
+
+.impairment-actions button,
+.capture-inline-actions button {
+  min-height: 34px;
+
+  padding: 0 12px;
+
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+
+.qdisc-preview {
+  display: block;
+
+  margin-top: 10px;
+  padding: 8px;
+
+  overflow-x: auto;
+
+  border-radius: 5px;
+
+  background: #eef1ef;
+
+  color: #49524d;
+
+  font-size: 8px;
+  line-height: 1.4;
+}
