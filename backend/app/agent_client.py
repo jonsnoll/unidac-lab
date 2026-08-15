@@ -237,3 +237,12 @@ def vm_restart(
         "vm-restart",
         domain_name,
     )
+
+
+def vm_undefine(
+    domain_name,
+):
+    return run_agent(
+        "vm-undefine",
+        domain_name,
+    )

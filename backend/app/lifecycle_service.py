@@ -176,3 +176,114 @@ def execute_vm_lifecycle(
         "result":
             result,
     }
+
+
+def resolve_managed_vm(
+    node_id,
+):
+    plan = build_apply_plan()
+
+    for action in plan.get(
+        "actions",
+        [],
+    ):
+        if (
+            action.get("node_id")
+            != node_id
+        ):
+            continue
+
+        if action.get(
+            "action"
+        ) not in {
+            "create-vm",
+            "reuse-vm",
+        }:
+            continue
+
+        domain_name = action.get(
+            "domain_name"
+        )
+
+        if not domain_name:
+            continue
+
+        return {
+            "node_id":
+                node_id,
+
+            "node_name":
+                action.get(
+                    "node_name"
+                ),
+
+            "domain_name":
+                domain_name,
+
+            "exists":
+                action.get("action")
+                == "reuse-vm",
+        }
+
+    raise LifecycleError(
+        "Node de VM gerenciado "
+        "nao encontrado.",
+        kind="vm-node-not-found",
+        node_id=node_id,
+    )
+
+
+def remove_vm_runtime(
+    node_id,
+):
+    from app.agent_client import (
+        vm_undefine,
+    )
+
+    runtime = resolve_managed_vm(
+        node_id
+    )
+
+    try:
+        result = vm_undefine(
+            runtime["domain_name"]
+        )
+
+    except AgentError as error:
+        message = str(error)
+
+        kind = "agent-error"
+
+        if (
+            "precisa estar desligado"
+            in message
+        ):
+            kind = "runtime-running"
+
+        raise LifecycleError(
+            message,
+            kind=kind,
+            node_id=node_id,
+            operation="remove-runtime",
+            cause=error,
+        ) from error
+
+    return {
+        "status":
+            "ok",
+
+        "operation":
+            "remove-runtime",
+
+        "node_id":
+            node_id,
+
+        "node_name":
+            runtime["node_name"],
+
+        "domain_name":
+            runtime["domain_name"],
+
+        "result":
+            result,
+    }

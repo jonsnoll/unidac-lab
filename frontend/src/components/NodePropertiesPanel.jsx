@@ -564,6 +564,52 @@ function NodePropertiesPanel({
                   </button>
                 )}
               </div>
+
+
+              {
+                runtimeState ===
+                'shutoff' && (
+                  <div className="runtime-remove">
+                    <button
+                      type="button"
+                      disabled={
+                        Boolean(
+                          lifecycleAction
+                        )
+                      }
+                      onClick={async () => {
+                        const confirmed =
+                          window.confirm(
+                            'Remove only the runtime VM?\n\n' +
+                            'The QCOW2 overlay and planned device ' +
+                            'will be preserved.'
+                          )
+
+
+                        if (!confirmed) {
+                          return
+                        }
+
+
+                        await handleLifecycle(
+                          'remove-runtime'
+                        )
+                      }}
+                    >
+                      {
+                        lifecycleAction ===
+                        'remove-runtime'
+                          ? 'Removing runtime...'
+                          : 'Remove runtime'
+                      }
+                    </button>
+
+                    <small>
+                      Overlay disk will be preserved.
+                    </small>
+                  </div>
+                )
+              }
             </div>
           </>
         )}

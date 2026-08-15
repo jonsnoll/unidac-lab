@@ -15,6 +15,7 @@ from app.apply_service import (
 from app.lifecycle_service import (
     LifecycleError,
     execute_vm_lifecycle,
+    remove_vm_runtime,
 )
 
 
@@ -156,3 +157,51 @@ def restart_vm_node(
         node_id,
         "restart",
     )
+
+
+
+@router.delete(
+    "/nodes/{node_id}/runtime"
+)
+def remove_runtime_vm_node(
+    node_id: str,
+):
+    try:
+        return remove_vm_runtime(
+            node_id
+        )
+
+    except LifecycleError as error:
+        status_code = 400
+
+        if (
+            error.kind
+            == "vm-node-not-found"
+        ):
+            status_code = 404
+
+        elif (
+            error.kind
+            == "runtime-running"
+        ):
+            status_code = 409
+
+        elif (
+            error.kind
+            == "agent-error"
+        ):
+            status_code = 502
+
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "message":
+                    str(error),
+
+                "kind":
+                    error.kind,
+
+                "node_id":
+                    error.node_id,
+            },
+        ) from error

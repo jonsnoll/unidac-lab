@@ -1127,6 +1127,7 @@ function App() {
             'start',
             'shutdown',
             'restart',
+            'remove-runtime',
           ])
 
 
@@ -1141,14 +1142,32 @@ function App() {
         }
 
 
+        const removeRuntime =
+          operation ===
+          'remove-runtime'
+
+
+        const endpoint =
+          removeRuntime
+            ? `/api/lab/nodes/${
+                encodeURIComponent(
+                  nodeId
+                )
+              }/runtime`
+            : `/api/lab/nodes/${
+                encodeURIComponent(
+                  nodeId
+                )
+              }/${operation}`
+
+
         const response = await fetch(
-          `/api/lab/nodes/${
-            encodeURIComponent(
-              nodeId
-            )
-          }/${operation}`,
+          endpoint,
           {
-            method: 'POST',
+            method:
+              removeRuntime
+                ? 'DELETE'
+                : 'POST',
           }
         )
 
@@ -1194,6 +1213,11 @@ function App() {
          * continuara acompanhando.
          */
         await refreshRuntimeStates()
+
+
+        if (removeRuntime) {
+          window.location.reload()
+        }
 
 
         return data
