@@ -1941,6 +1941,76 @@ def vm_restart(
         conn.close()
 
 
+
+def vm_undefine(
+    domain_name,
+):
+    require_root()
+
+    validate_managed_domain_name(
+        domain_name
+    )
+
+    conn = get_connection()
+
+    try:
+        try:
+            domain = conn.lookupByName(
+                domain_name
+            )
+
+        except Exception:
+            output(
+                {
+                    "status":
+                        "absent",
+
+                    "domain":
+                        domain_name,
+
+                    "state":
+                        "absent",
+
+                    "storage_preserved":
+                        True,
+                }
+            )
+
+            return
+
+
+        if domain.isActive():
+            fail(
+                "Dominio precisa estar "
+                "desligado antes de remover "
+                "o runtime: "
+                f"{domain_name}"
+            )
+
+
+        domain.undefine()
+
+
+        output(
+            {
+                "status":
+                    "undefined",
+
+                "domain":
+                    domain_name,
+
+                "state":
+                    "absent",
+
+                "storage_preserved":
+                    True,
+            }
+        )
+
+    finally:
+        conn.close()
+
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -2053,6 +2123,19 @@ def main():
             )
 
         vm_restart(
+            sys.argv[2]
+        )
+
+        return
+
+
+    if command == "vm-undefine":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: vm-undefine <domain>"
+            )
+
+        vm_undefine(
             sys.argv[2]
         )
 
