@@ -110,3 +110,30 @@
   stroke-width: 2;
   stroke-dasharray: 7 5;
 }
+
+
+/*
+ * Desired node que possui um
+ * recurso real reconciliado.
+ */
+.planned-device-node.reconciled {
+  border-color: #4f8a63;
+
+  box-shadow:
+    0 0 0 1px
+    rgba(79, 138, 99, 0.15);
+}
+
+
+.planned-device-node.reconciled
+.planned-device-state {
+  color: #337348;
+}
+
+
+.planned-device-node.reconciled
+.planned-handle {
+  border-color: #4f8a63;
+
+  background: #ffffff;
+}

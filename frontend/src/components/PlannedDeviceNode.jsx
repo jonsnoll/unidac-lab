@@ -21,6 +21,19 @@ function PlannedDeviceNode({
     data.kind === 'cloud'
 
 
+  const reconciled =
+    Boolean(
+      data.runtimeId &&
+      data.runtimeState
+    )
+
+
+  const stateLabel =
+    reconciled
+      ? data.runtimeState.toUpperCase()
+      : 'PLANNED'
+
+
   const interfaceCount =
     Number(
       data.interfaceCount || 1
@@ -54,9 +67,31 @@ function PlannedDeviceNode({
 
 
   return (
-    <div className="planned-device-node">
-      <div className="planned-device-state">
-        PLANNED
+    <div
+      className={
+        `planned-device-node${
+          reconciled
+            ? ' reconciled'
+            : ''
+        }`
+      }
+
+      title={
+        data.runtimeId
+          ? `Runtime: ${data.runtimeId}`
+          : undefined
+      }
+    >
+      <div
+        className={
+          `planned-device-state${
+            reconciled
+              ? ' runtime'
+              : ''
+          }`
+        }
+      >
+        {stateLabel}
       </div>
 
       <strong className="planned-device-name">

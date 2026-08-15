@@ -133,6 +133,7 @@ function createPlannedNode(
   device,
   index,
   position,
+  runtimeMatch = null,
 ) {
   const fallbackPosition = {
     x: 300 + index * 30,
@@ -170,6 +171,14 @@ function createPlannedNode(
 
       runtime:
         device?.runtime,
+
+      runtimeState:
+        runtimeMatch?.state ||
+        null,
+
+      runtimeId:
+        runtimeMatch?.id ||
+        null,
 
       interfaceCount,
 
@@ -340,12 +349,14 @@ function App() {
           catalogResponse,
           desiredResponse,
           imagesResponse,
+          applyPlanResponse,
         ] = await Promise.all([
           fetch('/api/lab/topology'),
           fetch('/api/lab/layout'),
           fetch('/api/catalog/devices'),
           fetch('/api/lab/desired'),
           fetch('/api/images'),
+          fetch('/api/lab/apply-plan'),
         ])
 
 
@@ -384,6 +395,13 @@ function App() {
         }
 
 
+        if (!applyPlanResponse.ok) {
+          throw new Error(
+            `Apply Plan API respondeu HTTP ${applyPlanResponse.status}`
+          )
+        }
+
+
         const topology =
           await topologyResponse.json()
 
@@ -398,6 +416,9 @@ function App() {
 
         const images =
           await imagesResponse.json()
+
+        const applyPlan =
+          await applyPlanResponse.json()
 
 
         const savedPositions = {}
@@ -422,8 +443,120 @@ function App() {
           )
 
 
+        const topologyNodeMap =
+          Object.fromEntries(
+            (topology.nodes || []).map(
+              (node) => [
+                node.id,
+                node,
+              ]
+            )
+          )
+
+
+        const desiredNodeMap =
+          Object.fromEntries(
+            (desired.nodes || []).map(
+              (node) => [
+                node.id,
+                node,
+              ]
+            )
+          )
+
+
+        const runtimeByDesiredId = {}
+
+        const hiddenRealNodeIds =
+          new Set()
+
+
+        for (
+          const action
+          of applyPlan.actions || []
+        ) {
+          const desiredNode =
+            desiredNodeMap[
+              action.node_id
+            ]
+
+
+          let realNodeId = null
+
+
+          if (action.domain_name) {
+            realNodeId =
+              `vm:${action.domain_name}`
+          } else if (
+            action.libvirt_network
+          ) {
+            realNodeId =
+              `net:${action.libvirt_network}`
+          }
+
+
+          if (!realNodeId) {
+            continue
+          }
+
+
+          const realNode =
+            topologyNodeMap[
+              realNodeId
+            ]
+
+
+          if (!realNode) {
+            continue
+          }
+
+
+          runtimeByDesiredId[
+            action.node_id
+          ] = {
+            id:
+              realNode.id,
+
+            state:
+              realNode.state ||
+              (
+                realNode.active
+                  ? 'active'
+                  : null
+              ),
+          }
+
+
+          /*
+           * Cloud/NAT representa uma
+           * rede compartilhada.
+           *
+           * A rede default continua
+           * visivel como infraestrutura
+           * real global.
+           */
+          if (
+            desiredNode?.template_id
+            !== 'cloud-nat'
+          ) {
+            hiddenRealNodeIds.add(
+              realNodeId
+            )
+          }
+        }
+
+
+        const visibleRealTopologyNodes =
+          (topology.nodes || []).filter(
+            (node) =>
+              !hiddenRealNodeIds.has(
+                node.id
+              )
+          )
+
+
         const realNodes =
-          topology.nodes.map(
+          visibleRealTopologyNodes.map(
             (node, index) =>
               createRealNode(
                 node,
@@ -443,6 +576,21 @@ function App() {
                 ],
                 index,
                 savedPositions[node.id],
+                runtimeByDesiredId[
+                  node.id
+                ] || null,
+              )
+          )
+
+
+        const visibleRealLinks =
+          (topology.links || []).filter(
+            (link) =>
+              !hiddenRealNodeIds.has(
+                link.source
+              ) &&
+              !hiddenRealNodeIds.has(
+                link.target
               )
           )
 
@@ -467,7 +615,7 @@ function App() {
         ])
 
         setEdges([
-          ...topology.links.map(
+          ...visibleRealLinks.map(
             createEdge
           ),
 
