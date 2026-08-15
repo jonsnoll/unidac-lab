@@ -89,3 +89,45 @@ Cisco. O IOS nao e iniciado.
 
 O template permanece desabilitado no catalogo ate o provider
 IOL conseguir criar e conectar uma instancia de forma segura.
+
+## Provider foundation
+
+O provider IOL agora possui um controlador local:
+
+`/usr/local/libexec/unidac-lab-iolctl`
+
+A primeira versao oferece:
+
+- `doctor`;
+- `license-status`;
+- `prepare`;
+- `list`;
+- `inspect`;
+- `remove-prepared`.
+
+`prepare` nao executa IOS. Ele valida o binario, valida o sandbox
+e cria somente um manifesto de estado para a futura instancia.
+
+O estado persistente fica em:
+
+`/var/lib/unidac-lab/iol/instances`
+
+## License gate
+
+O caminho reservado para uma licenca IOL autorizada pelo usuario
+e:
+
+`/etc/unidac-lab/iol/iourc`
+
+O unidac-lab nao cria esse arquivo, nao gera chave e nao altera
+seu conteudo.
+
+Quando fornecido, o arquivo deve ser:
+
+- propriedade de `root`;
+- permissao `0600` ou mais restritiva;
+- nao vazio.
+
+Mesmo com uma licenca presente, o comando de startup continua
+bloqueado nesta etapa. O proximo marco implementara networking,
+console e o contrato de execucao antes de liberar lifecycle.
