@@ -131,3 +131,30 @@ Quando fornecido, o arquivo deve ser:
 Mesmo com uma licenca presente, o comando de startup continua
 bloqueado nesta etapa. O proximo marco implementara networking,
 console e o contrato de execucao antes de liberar lifecycle.
+
+## Static runtime probe
+
+Antes de implementar o comando de startup, o unidac-lab possui
+um probe estatico para analisar o executavel IOL sem inicia-lo.
+
+O probe usa somente:
+
+- `file`;
+- `readelf`;
+- `strings`;
+- SHA256.
+
+Ele procura pistas de:
+
+- opcoes de linha de comando;
+- NETMAP/networking;
+- interfaces;
+- console;
+- sockets/UDP;
+- variaveis de ambiente;
+- referencias de licenciamento.
+
+O probe nao le o conteudo de `iourc` e nao executa o IOS.
+
+A finalidade e evitar implementar o provider com flags
+adivinhadas.
