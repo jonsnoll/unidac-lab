@@ -1688,6 +1688,259 @@ def vm_ensure():
         conn.close()
 
 
+
+def validate_managed_domain_name(
+    domain_name,
+):
+    if not isinstance(
+        domain_name,
+        str,
+    ):
+        fail(
+            "Nome de dominio invalido."
+        )
+
+
+    if (
+        len(domain_name) < 6
+        or len(domain_name) > 64
+        or not domain_name.startswith(
+            "ulab-"
+        )
+    ):
+        fail(
+            "Dominio fora do namespace "
+            "gerenciado pelo unidac-lab: "
+            f"{domain_name}"
+        )
+
+
+    allowed = set(
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789-"
+    )
+
+
+    if any(
+        char not in allowed
+        for char in domain_name
+    ):
+        fail(
+            "Nome de dominio gerenciado "
+            "contem caracteres invalidos: "
+            f"{domain_name}"
+        )
+
+
+    if domain_name.endswith("-"):
+        fail(
+            "Nome de dominio gerenciado "
+            "invalido: "
+            f"{domain_name}"
+        )
+
+
+def get_managed_domain(
+    conn,
+    domain_name,
+):
+    validate_managed_domain_name(
+        domain_name
+    )
+
+
+    try:
+        return conn.lookupByName(
+            domain_name
+        )
+
+    except Exception:
+        fail(
+            "Dominio gerenciado "
+            "nao encontrado: "
+            f"{domain_name}"
+        )
+
+
+def vm_start(
+    domain_name,
+):
+    require_root()
+
+    conn = get_connection()
+
+    try:
+        domain = get_managed_domain(
+            conn,
+            domain_name,
+        )
+
+
+        if domain.isActive():
+            output(
+                {
+                    "status":
+                        "exists",
+
+                    "domain":
+                        domain_name,
+
+                    "state":
+                        "running",
+
+                    "started":
+                        False,
+                }
+            )
+
+            return
+
+
+        domain.create()
+
+
+        output(
+            {
+                "status":
+                    "started",
+
+                "domain":
+                    domain_name,
+
+                "state":
+                    "running",
+
+                "started":
+                    True,
+            }
+        )
+
+    finally:
+        conn.close()
+
+
+def vm_shutdown(
+    domain_name,
+):
+    require_root()
+
+    conn = get_connection()
+
+    try:
+        domain = get_managed_domain(
+            conn,
+            domain_name,
+        )
+
+
+        if not domain.isActive():
+            output(
+                {
+                    "status":
+                        "exists",
+
+                    "domain":
+                        domain_name,
+
+                    "state":
+                        "shut off",
+
+                    "shutdown_requested":
+                        False,
+                }
+            )
+
+            return
+
+
+        domain.shutdown()
+
+
+        output(
+            {
+                "status":
+                    "shutdown-requested",
+
+                "domain":
+                    domain_name,
+
+                "state":
+                    "shutdown-requested",
+
+                "shutdown_requested":
+                    True,
+            }
+        )
+
+    finally:
+        conn.close()
+
+
+def vm_restart(
+    domain_name,
+):
+    require_root()
+
+    conn = get_connection()
+
+    try:
+        domain = get_managed_domain(
+            conn,
+            domain_name,
+        )
+
+
+        if not domain.isActive():
+            domain.create()
+
+            output(
+                {
+                    "status":
+                        "started",
+
+                    "domain":
+                        domain_name,
+
+                    "state":
+                        "running",
+
+                    "started":
+                        True,
+
+                    "restart_requested":
+                        False,
+                }
+            )
+
+            return
+
+
+        domain.reboot(0)
+
+
+        output(
+            {
+                "status":
+                    "restart-requested",
+
+                "domain":
+                    domain_name,
+
+                "state":
+                    "restart-requested",
+
+                "started":
+                    False,
+
+                "restart_requested":
+                    True,
+            }
+        )
+
+    finally:
+        conn.close()
+
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -1763,6 +2016,45 @@ def main():
             )
 
         vm_ensure()
+
+        return
+
+
+    if command == "vm-start":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: vm-start <domain>"
+            )
+
+        vm_start(
+            sys.argv[2]
+        )
+
+        return
+
+
+    if command == "vm-shutdown":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: vm-shutdown <domain>"
+            )
+
+        vm_shutdown(
+            sys.argv[2]
+        )
+
+        return
+
+
+    if command == "vm-restart":
+        if len(sys.argv) != 3:
+            fail(
+                "Uso: vm-restart <domain>"
+            )
+
+        vm_restart(
+            sys.argv[2]
+        )
 
         return
 
