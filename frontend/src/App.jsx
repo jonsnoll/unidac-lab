@@ -18,6 +18,7 @@ import DevicePalette from './components/DevicePalette'
 import NodePropertiesPanel from './components/NodePropertiesPanel'
 import ImageImportModal from './components/ImageImportModal'
 import ApplyPlanModal from './components/ApplyPlanModal'
+import ConsoleModal from './components/ConsoleModal'
 import PlannedDeviceNode from './components/PlannedDeviceNode'
 
 import '@xyflow/react/dist/style.css'
@@ -313,6 +314,12 @@ function App() {
     showApplyPlan,
     setShowApplyPlan,
   ] = useState(false)
+
+
+  const [
+    consoleTarget,
+    setConsoleTarget,
+  ] = useState(null)
 
 
   const [
@@ -2037,6 +2044,16 @@ function App() {
               runNodeLifecycle
             }
 
+            onConsole={(node) =>
+              setConsoleTarget({
+                nodeId:
+                  node.id,
+
+                nodeName:
+                  node.name,
+              })
+            }
+
             onClose={() =>
               setSelectedDesiredNodeId(
                 null
@@ -2053,6 +2070,25 @@ function App() {
           />
         )}
       </div>
+
+
+      {consoleTarget && (
+        <ConsoleModal
+          nodeId={
+            consoleTarget.nodeId
+          }
+
+          nodeName={
+            consoleTarget.nodeName
+          }
+
+          onClose={() =>
+            setConsoleTarget(
+              null
+            )
+          }
+        />
+      )}
 
 
       {showApplyPlan && (

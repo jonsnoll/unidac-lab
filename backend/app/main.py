@@ -1,3 +1,4 @@
+from app.console_router import router as console_router
 import subprocess
 
 import libvirt
@@ -207,3 +208,4 @@ app.include_router(image_router)
 from app.apply_router import router as apply_router
 
 app.include_router(apply_router)
+app.include_router(console_router)

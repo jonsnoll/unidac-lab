@@ -405,3 +405,27 @@
 
   color: #8a8f8c;
 }
+
+
+.runtime-console {
+  width: 100%;
+
+  min-height: 34px;
+
+  border: 1px solid #4d6879;
+  border-radius: 6px;
+
+  background: #4d6879;
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+
+.runtime-console:hover {
+  background: #405b6c;
+}

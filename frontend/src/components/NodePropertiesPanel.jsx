@@ -30,6 +30,7 @@ function NodePropertiesPanel({
   runtimeId,
   runtimeState,
   onLifecycle,
+  onConsole,
   onClose,
   onSave,
   onDelete,
@@ -490,6 +491,24 @@ function NodePropertiesPanel({
                   {lifecycleError}
                 </div>
               )}
+
+
+              {
+                runtimeRunning &&
+                onConsole && (
+                  <button
+                    type="button"
+                    className="runtime-console"
+                    onClick={() =>
+                      onConsole(
+                        node
+                      )
+                    }
+                  >
+                    Console
+                  </button>
+                )
+              }
 
 
               <div className="runtime-actions">
