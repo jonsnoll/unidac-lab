@@ -239,3 +239,126 @@
   font-size: 10px;
   text-align: right;
 }
+
+
+.runtime-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 12px;
+
+  border: 1px solid #dfe3e6;
+  border-radius: 7px;
+
+  background: #fafafa;
+}
+
+
+.runtime-card > div:not(
+  .runtime-actions
+):not(
+  .runtime-error
+) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+
+.runtime-card span {
+  font-size: 9px;
+  color: #858b90;
+}
+
+
+.runtime-card code {
+  max-width: 190px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  font-size: 9px;
+
+  white-space: nowrap;
+}
+
+
+.runtime-state {
+  font-size: 10px;
+}
+
+
+.runtime-state.running {
+  color: #347a4c;
+}
+
+
+.runtime-state.stopped {
+  color: #8b5b36;
+}
+
+
+.runtime-actions {
+  display: flex;
+  gap: 7px;
+
+  padding-top: 4px;
+}
+
+
+.runtime-actions button {
+  flex: 1;
+
+  min-height: 34px;
+
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+
+.runtime-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+
+.runtime-start {
+  border: 1px solid #3f7c55;
+  background: #3f7c55;
+  color: #ffffff;
+}
+
+
+.runtime-restart {
+  border: 1px solid #c9a85a;
+  background: #ffffff;
+  color: #81621e;
+}
+
+
+.runtime-stop {
+  border: 1px solid #d2a4a4;
+  background: #ffffff;
+  color: #964545;
+}
+
+
+.runtime-error {
+  padding: 8px;
+
+  border-radius: 5px;
+
+  background: #fff0f0;
+
+  color: #9a3535;
+
+  font-size: 9px;
+  line-height: 1.4;
+}

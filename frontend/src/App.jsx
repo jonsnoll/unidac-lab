@@ -780,6 +780,135 @@ function App() {
   }, [setNodes, setEdges])
 
 
+  const refreshRuntimeStates =
+    useCallback(
+      async () => {
+        try {
+          const response = await fetch(
+            '/api/lab/topology'
+          )
+
+
+          if (!response.ok) {
+            return
+          }
+
+
+          const topology =
+            await response.json()
+
+
+          const topologyMap =
+            Object.fromEntries(
+              (
+                topology.nodes ||
+                []
+              ).map(
+                (node) => [
+                  node.id,
+                  node,
+                ]
+              )
+            )
+
+
+          setNodes(
+            (currentNodes) =>
+              currentNodes.map(
+                (flowNode) => {
+                  const runtimeId =
+                    flowNode.data
+                      ?.runtimeId
+
+
+                  if (!runtimeId) {
+                    return flowNode
+                  }
+
+
+                  const runtimeNode =
+                    topologyMap[
+                      runtimeId
+                    ]
+
+
+                  if (!runtimeNode) {
+                    return {
+                      ...flowNode,
+
+                      data: {
+                        ...flowNode.data,
+
+                        runtimeState:
+                          null,
+                      },
+                    }
+                  }
+
+
+                  const nextState =
+                    runtimeNode.state ||
+                    (
+                      runtimeNode.active
+                        ? 'active'
+                        : 'inactive'
+                    )
+
+
+                  if (
+                    flowNode.data
+                      ?.runtimeState ===
+                    nextState
+                  ) {
+                    return flowNode
+                  }
+
+
+                  return {
+                    ...flowNode,
+
+                    data: {
+                      ...flowNode.data,
+
+                      runtimeState:
+                        nextState,
+                    },
+                  }
+                }
+              )
+          )
+
+        } catch (error) {
+          console.error(
+            'Runtime refresh failed',
+            error
+          )
+        }
+      },
+      [
+        setNodes,
+      ]
+    )
+
+
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(
+        refreshRuntimeStates,
+        2000,
+      )
+
+
+    return () => {
+      window.clearInterval(
+        intervalId
+      )
+    }
+  }, [
+    refreshRuntimeStates,
+  ])
+
+
   const saveLayout = useCallback(
     async (currentNodes) => {
       const payload = {
@@ -983,6 +1112,94 @@ function App() {
         catalogDevices,
         saveDesiredTopology,
         setNodes,
+      ]
+    )
+
+
+  const runNodeLifecycle =
+    useCallback(
+      async (
+        nodeId,
+        operation,
+      ) => {
+        const allowedOperations =
+          new Set([
+            'start',
+            'shutdown',
+            'restart',
+          ])
+
+
+        if (
+          !allowedOperations.has(
+            operation
+          )
+        ) {
+          throw new Error(
+            'Lifecycle operation invalid.'
+          )
+        }
+
+
+        const response = await fetch(
+          `/api/lab/nodes/${
+            encodeURIComponent(
+              nodeId
+            )
+          }/${operation}`,
+          {
+            method: 'POST',
+          }
+        )
+
+
+        let data = null
+
+        try {
+          data =
+            await response.json()
+
+        } catch {
+          data = null
+        }
+
+
+        if (!response.ok) {
+          const message =
+            typeof data?.detail ===
+            'string'
+              ? data.detail
+              : (
+                  data?.detail
+                    ?.message ||
+                  data?.message ||
+                  `Lifecycle API HTTP ${
+                    response.status
+                  }`
+                )
+
+
+          throw new Error(
+            message
+          )
+        }
+
+
+        /*
+         * Start normalmente muda o
+         * runtime imediatamente.
+         *
+         * Shutdown/restart sao
+         * assincronos, e o polling
+         * continuara acompanhando.
+         */
+        await refreshRuntimeStates()
+
+
+        return data
+      },
+      [
+        refreshRuntimeStates,
       ]
     )
 
@@ -1772,6 +1989,28 @@ function App() {
 
             images={
               imageLibrary
+            }
+
+            runtimeId={
+              nodes.find(
+                (item) =>
+                  item.id ===
+                  selectedDesiredNode.id
+              )?.data?.runtimeId ||
+              null
+            }
+
+            runtimeState={
+              nodes.find(
+                (item) =>
+                  item.id ===
+                  selectedDesiredNode.id
+              )?.data?.runtimeState ||
+              null
+            }
+
+            onLifecycle={
+              runNodeLifecycle
             }
 
             onClose={() =>

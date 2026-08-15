@@ -27,6 +27,9 @@ function NodePropertiesPanel({
   node,
   device,
   images,
+  runtimeId,
+  runtimeState,
+  onLifecycle,
   onClose,
   onSave,
   onDelete,
@@ -45,6 +48,18 @@ function NodePropertiesPanel({
 
   const [imageId, setImageId] =
     useState('')
+
+
+  const [
+    lifecycleAction,
+    setLifecycleAction,
+  ] = useState('')
+
+
+  const [
+    lifecycleError,
+    setLifecycleError,
+  ] = useState('')
 
 
   const isQemu =
@@ -118,6 +133,51 @@ function NodePropertiesPanel({
   }
 
 
+  const runtimeRunning =
+    runtimeState === 'running'
+
+
+  const runtimeAvailable =
+    Boolean(
+      runtimeId &&
+      runtimeState
+    )
+
+
+  const handleLifecycle =
+    async (operation) => {
+      if (
+        !onLifecycle ||
+        lifecycleAction
+      ) {
+        return
+      }
+
+
+      setLifecycleError('')
+      setLifecycleAction(
+        operation
+      )
+
+
+      try {
+        await onLifecycle(
+          node.id,
+          operation,
+        )
+
+      } catch (error) {
+        setLifecycleError(
+          error.message ||
+          'Erro executando lifecycle.'
+        )
+
+      } finally {
+        setLifecycleAction('')
+      }
+    }
+
+
   const handleSubmit = (event) => {
     event.preventDefault()
 
@@ -156,7 +216,11 @@ function NodePropertiesPanel({
       <div className="properties-header">
         <div>
           <span>
-            PLANNED DEVICE
+            {
+              runtimeAvailable
+                ? runtimeState.toUpperCase()
+                : 'PLANNED DEVICE'
+            }
           </span>
 
           <strong>
@@ -374,6 +438,133 @@ function NodePropertiesPanel({
                 </span>
               </div>
             )}
+          </>
+        )}
+
+
+        {isQemu && runtimeId && (
+          <>
+            <div className="properties-section-title">
+              Runtime
+            </div>
+
+
+            <div className="runtime-card">
+              <div>
+                <span>
+                  State
+                </span>
+
+                <strong
+                  className={
+                    runtimeRunning
+                      ? 'runtime-state running'
+                      : 'runtime-state stopped'
+                  }
+                >
+                  {
+                    runtimeState
+                      ?.toUpperCase() ||
+                    'UNKNOWN'
+                  }
+                </strong>
+              </div>
+
+
+              <div>
+                <span>
+                  Domain
+                </span>
+
+                <code>
+                  {runtimeId.replace(
+                    /^vm:/,
+                    ''
+                  )}
+                </code>
+              </div>
+
+
+              {lifecycleError && (
+                <div className="runtime-error">
+                  {lifecycleError}
+                </div>
+              )}
+
+
+              <div className="runtime-actions">
+                {runtimeRunning ? (
+                  <>
+                    <button
+                      type="button"
+                      className="runtime-restart"
+                      disabled={
+                        Boolean(
+                          lifecycleAction
+                        )
+                      }
+                      onClick={() =>
+                        handleLifecycle(
+                          'restart'
+                        )
+                      }
+                    >
+                      {
+                        lifecycleAction ===
+                        'restart'
+                          ? 'Restarting...'
+                          : 'Restart'
+                      }
+                    </button>
+
+
+                    <button
+                      type="button"
+                      className="runtime-stop"
+                      disabled={
+                        Boolean(
+                          lifecycleAction
+                        )
+                      }
+                      onClick={() =>
+                        handleLifecycle(
+                          'shutdown'
+                        )
+                      }
+                    >
+                      {
+                        lifecycleAction ===
+                        'shutdown'
+                          ? 'Stopping...'
+                          : 'Stop'
+                      }
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="runtime-start"
+                    disabled={
+                      Boolean(
+                        lifecycleAction
+                      )
+                    }
+                    onClick={() =>
+                      handleLifecycle(
+                        'start'
+                      )
+                    }
+                  >
+                    {
+                      lifecycleAction ===
+                      'start'
+                        ? 'Starting...'
+                        : 'Start'
+                    }
+                  </button>
+                )}
+              </div>
+            </div>
           </>
         )}
 
