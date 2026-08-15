@@ -455,6 +455,24 @@ async def main():
             "console returned no data"
         )
 
+    lowered = received.lower()
+
+    if (
+        "[console error]"
+        in lowered
+        or
+        "console disponivel somente"
+        in lowered
+    ):
+        raise SystemExit(
+            received[:300]
+        )
+
+    if "console/agentd" not in lowered:
+        raise SystemExit(
+            "console AgentD banner not received"
+        )
+
     print(
         received[:200]
     )

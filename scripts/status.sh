@@ -295,12 +295,20 @@ DOMAINS="$(
     || true
 )"
 
+MANAGED_TOTAL=0
+MANAGED_RUNNING=0
+
+
 if [ -z "$DOMAINS" ]; then
     echo "  no managed domains"
+
+    LAB_STATE="EMPTY"
 else
     while IFS= read -r domain; do
         [ -n "$domain" ] \
           || continue
+
+        MANAGED_TOTAL=$((MANAGED_TOTAL + 1))
 
         state="$(
             virsh \
@@ -314,8 +322,28 @@ else
         line \
           "$domain" \
           "$state"
+
+        if [ "$state" = "running" ]; then
+            MANAGED_RUNNING=$((MANAGED_RUNNING + 1))
+        fi
     done <<< "$DOMAINS"
+
+
+    if [ "$MANAGED_RUNNING" -eq "$MANAGED_TOTAL" ]; then
+        LAB_STATE="RUNNING"
+
+    elif [ "$MANAGED_RUNNING" -eq 0 ]; then
+        LAB_STATE="STOPPED"
+
+    else
+        LAB_STATE="PARTIAL"
+    fi
 fi
+
+
+line \
+  "lab runtime" \
+  "$LAB_STATE ($MANAGED_RUNNING/$MANAGED_TOTAL running)"
 
 echo
 
@@ -354,11 +382,15 @@ echo
 
 
 if [ "$FAILURES" -eq 0 ]; then
-    echo "RESULT: HEALTHY"
+    echo "PLATFORM: HEALTHY"
+    echo "LAB     : $LAB_STATE"
+    echo "RESULT  : HEALTHY"
     exit 0
 fi
 
+echo "PLATFORM: DEGRADED"
+echo "LAB     : $LAB_STATE"
 echo \
-  "RESULT: DEGRADED ($FAILURES failure(s))"
+  "RESULT  : DEGRADED ($FAILURES failure(s))"
 
 exit 1

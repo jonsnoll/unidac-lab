@@ -259,6 +259,10 @@ def network_ensure(
                 )
 
 
+            network.setAutostart(
+                True
+            )
+
             if not network.isActive():
                 network.create()
 
@@ -317,7 +321,7 @@ def network_ensure(
         network.create()
 
         network.setAutostart(
-            False
+            True
         )
 
 
@@ -339,7 +343,7 @@ def network_ensure(
                     True,
 
                 "autostart":
-                    False,
+                    True,
             }
         )
 
@@ -1552,13 +1556,14 @@ def vm_ensure():
             )
 
 
+            # Runtime ja existente:
+            #
+            # ensure valida/configura o dominio,
+            # mas nao altera seu power state.
+            #
+            # Start/Shutdown/Restart pertencem
+            # exclusivamente ao lifecycle.
             started = False
-
-
-            if not domain.isActive():
-                domain.create()
-
-                started = True
 
 
             output(
