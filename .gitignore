@@ -50,3 +50,6 @@ run/
 # Lab runtime state
 labs/**
 !labs/.gitkeep
+
+# User-provided executable appliance images
+images/store/**/*.bin

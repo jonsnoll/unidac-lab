@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "cisco-iol-l2-switch",
+  "name": "Cisco IOL L2 Switch",
+  "vendor": "cisco",
+  "category": "switch",
+  "kind": "network-appliance",
+  "runtime": "iol",
+  "driver": "cisco-iol",
+  "description": "Cisco IOL Layer 2 switch. Runtime IOL em preparacao.",
+  "image_required": true,
+  "image_types": [
+    "bin"
+  ],
+  "enabled": false,
+  "availability": "coming-soon",
+  "defaults": {
+    "memory_mb": 256,
+    "interfaces": 8
+  },
+  "interfaces": {
+    "prefix": "Ethernet",
+    "minimum": 4,
+    "default": 8,
+    "maximum": 16,
+    "mode": "dynamic"
+  },
+  "console": {
+    "type": "serial"
+  }
+}

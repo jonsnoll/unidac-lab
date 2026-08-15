@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "cisco-iol-l2-adventerprise-15-1-20140814",
+  "name": "Cisco IOL L2 ADVENTERPRISE 15.1",
+  "vendor": "cisco",
+  "version": "15.1-20140814",
+  "kind": "executable-image",
+  "format": "bin",
+  "deployment": "iol-executable",
+  "description": "Imagem Cisco IOL L2 fornecida localmente pelo usuario. O projeto nao distribui a imagem.",
+  "compatible_templates": [
+    "cisco-iol-l2-switch"
+  ],
+  "storage": {
+    "relative_path": "images/store/cisco/cisco-iol-l2-adventerprise-15-1-20140814/base.bin",
+    "read_only_base": true
+  },
+  "integrity": {
+    "sha256": "5c1ce9b1766fe8441986ba5e3cedd72278e3f10d62503c67db03112a76b2cff2"
+  },
+  "image_info": {
+    "file_size_bytes": 73017484,
+    "architecture": "i386",
+    "executable_format": "elf32",
+    "host_runtime_status": "PARTIAL",
+    "missing_runtime_dependency": "libcrypto.so.4"
+  }
+}
