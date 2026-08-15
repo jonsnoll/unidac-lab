@@ -7,7 +7,7 @@
   "kind": "vm",
   "runtime": "qemu",
   "driver": "qemu-generic",
-  "description": "Maquina virtual Windows generica.",
+  "description": "Maquina virtual Windows generica. Runtime planejado para uma versao futura.",
   "image_required": true,
   "image_types": [
     "qcow2",
@@ -22,5 +22,7 @@
   "virtualization": {
     "nic_model": "virtio",
     "disk_bus": "virtio"
-  }
+  },
+  "availability": "coming-soon",
+  "enabled": false
 }

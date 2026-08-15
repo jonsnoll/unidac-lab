@@ -569,24 +569,18 @@ function App() {
         }
 
 
-        const visibleRealTopologyNodes =
-          (topology.nodes || []).filter(
-            (node) =>
-              !hiddenRealNodeIds.has(
-                node.id
-              )
-          )
-
-
-        const realNodes =
-          visibleRealTopologyNodes.map(
-            (node, index) =>
-              createRealNode(
-                node,
-                index,
-                savedPositions,
-              )
-          )
+        /*
+         * O Observed State completo continua
+         * disponivel para reconciliacao,
+         * lifecycle e diagnostico.
+         *
+         * O canvas do v0.1, entretanto,
+         * mostra somente o Desired State do
+         * laboratorio atual. Recursos globais
+         * ou externos do host libvirt nao sao
+         * renderizados.
+         */
+        const realNodes = []
 
 
         const plannedNodes =
@@ -606,16 +600,13 @@ function App() {
           )
 
 
-        const visibleRealLinks =
-          (topology.links || []).filter(
-            (link) =>
-              !hiddenRealNodeIds.has(
-                link.source
-              ) &&
-              !hiddenRealNodeIds.has(
-                link.target
-              )
-          )
+        /*
+         * Links reais permanecem no Observed
+         * State para reconciliar os Desired
+         * links abaixo, mas nao sao desenhados
+         * separadamente no canvas.
+         */
+        const visibleRealLinks = []
 
 
         /*
@@ -1477,6 +1468,28 @@ function App() {
 
 
         if (!device) {
+          return
+        }
+
+
+        /*
+         * Templates Coming Soon continuam
+         * visiveis no catalogo, mas nao
+         * podem entrar no Desired State.
+         *
+         * Essa validacao tambem protege
+         * contra um drag payload criado
+         * manualmente.
+         */
+        if (
+          device.enabled === false ||
+          device.availability ===
+            'coming-soon'
+        ) {
+          setSaveStatus(
+            `${device.name} is Coming Soon.`
+          )
+
           return
         }
 

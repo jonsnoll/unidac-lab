@@ -1,61 +1,46 @@
-import { useMemo, useState } from 'react'
+import {
+  useMemo,
+  useState,
+} from 'react'
 
 import './DevicePalette.css'
 
 
-function DeviceItem({ device }) {
-  const onDragStart = (event) => {
-    const payload = {
-      template_id: device.id,
-    }
+function isDeviceDisabled(device) {
+  return (
+    device?.enabled === false ||
+    device?.availability ===
+      'coming-soon'
+  )
+}
 
-    event.dataTransfer.setData(
-      'application/unidac-device',
-      JSON.stringify(payload),
-    )
 
-    event.dataTransfer.setData(
-      'text/plain',
-      device.id,
-    )
-
-    event.dataTransfer.effectAllowed = 'copy'
+function getDeviceIcon(device) {
+  if (
+    device.id === 'cloud-nat'
+  ) {
+    return '☁'
   }
 
+  if (
+    device.id === 'network'
+  ) {
+    return '◇'
+  }
 
-  return (
-    <div
-      className="device-item"
-      title={device.description}
-      draggable
-      onDragStart={onDragStart}
-    >
-      <div
-        className={
-          `device-icon device-icon-${device.kind}`
-        }
-      >
-        {device.kind === 'cloud' && '☁'}
-        {device.kind === 'network' && '◇'}
-        {device.kind === 'vm' && '▣'}
-        {device.kind === 'network-appliance' && '▤'}
-      </div>
+  if (
+    device.category === 'endpoint'
+  ) {
+    return '▣'
+  }
 
-      <div className="device-info">
-        <strong>
-          {device.name}
-        </strong>
+  if (
+    device.vendor === 'fortinet'
+  ) {
+    return '▤'
+  }
 
-        <span>
-          {device.runtime}
-
-          {device.image_required
-            ? ' · image required'
-            : ''}
-        </span>
-      </div>
-    </div>
-  )
+  return '▦'
 }
 
 
@@ -68,56 +53,172 @@ function DeviceSection({
   }
 
 
+  function onDragStart(
+    event,
+    device,
+  ) {
+    if (
+      isDeviceDisabled(
+        device
+      )
+    ) {
+      event.preventDefault()
+      return
+    }
+
+    event.dataTransfer.effectAllowed =
+      'copy'
+
+    event.dataTransfer.setData(
+      'application/unidac-device',
+      JSON.stringify({
+        template_id:
+          device.id,
+      })
+    )
+  }
+
+
   return (
     <section className="device-section">
       <div className="device-section-title">
         {title}
       </div>
 
+
       <div className="device-section-list">
-        {devices.map((device) => (
-          <DeviceItem
-            key={device.id}
-            device={device}
-          />
-        ))}
+        {devices.map((device) => {
+          const disabled =
+            isDeviceDisabled(
+              device
+            )
+
+          return (
+            <div
+              key={device.id}
+              className={[
+                'device-item',
+                disabled
+                  ? 'device-item-disabled'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              draggable={!disabled}
+              aria-disabled={
+                disabled
+              }
+              title={
+                disabled
+                  ? `${device.name} - Coming Soon`
+                  : device.description
+              }
+              onDragStart={(
+                event
+              ) =>
+                onDragStart(
+                  event,
+                  device,
+                )
+              }
+            >
+              <div className="device-icon">
+                {getDeviceIcon(
+                  device
+                )}
+              </div>
+
+
+              <div className="device-info">
+                <div className="device-title-row">
+                  <strong>
+                    {device.name}
+                  </strong>
+
+                  {disabled && (
+                    <span className="device-badge">
+                      COMING SOON
+                    </span>
+                  )}
+                </div>
+
+                <span>
+                  {
+                    disabled
+                      ? 'Runtime not available yet'
+                      : device.description
+                  }
+                </span>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
 }
 
 
+function formatVendor(
+  vendor,
+) {
+  if (!vendor) {
+    return 'Appliances'
+  }
+
+  return (
+    vendor.charAt(0).toUpperCase()
+    + vendor.slice(1)
+  )
+}
+
+
 function DevicePalette({
-  devices,
+  devices = [],
   onImportImage,
 }) {
-  const [search, setSearch] = useState('')
+  const [
+    search,
+    setSearch,
+  ] = useState('')
 
 
-  const filteredDevices = useMemo(() => {
-    const query =
-      search.trim().toLowerCase()
+  const filteredDevices =
+    useMemo(
+      () => {
+        const query =
+          search
+            .trim()
+            .toLowerCase()
 
-    if (!query) {
-      return devices
-    }
+        if (!query) {
+          return devices
+        }
 
+        return devices.filter(
+          (device) => {
+            const text = [
+              device.name,
+              device.vendor,
+              device.category,
+              device.description,
+              device.id,
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase()
 
-    return devices.filter((device) => {
-      const text = [
-        device.name,
-        device.vendor,
-        device.category,
-        device.kind,
-        device.description,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-
-      return text.includes(query)
-    })
-  }, [devices, search])
+            return text.includes(
+              query
+            )
+          }
+        )
+      },
+      [
+        devices,
+        search,
+      ],
+    )
 
 
   const infrastructure =
@@ -131,7 +232,8 @@ function DevicePalette({
   const endpoints =
     filteredDevices.filter(
       (device) =>
-        device.category === 'endpoint'
+        device.category ===
+        'endpoint'
     )
 
 
@@ -139,19 +241,24 @@ function DevicePalette({
     filteredDevices.filter(
       (device) =>
         device.category !==
-          'infrastructure' &&
+          'infrastructure'
+        &&
         device.category !==
           'endpoint'
     )
 
 
-  const vendors = [
-    ...new Set(
-      appliances.map(
-        (device) => device.vendor
-      )
-    ),
-  ].sort()
+  const vendors =
+    [
+      ...new Set(
+        appliances
+          .map(
+            (device) =>
+              device.vendor
+          )
+          .filter(Boolean)
+      ),
+    ].sort()
 
 
   return (
@@ -163,16 +270,19 @@ function DevicePalette({
           </strong>
 
           <span>
-            {devices.length} available
+            Drag to canvas
           </span>
         </div>
+
 
         <button
           type="button"
           className="palette-import-image"
-          onClick={onImportImage}
+          onClick={
+            onImportImage
+          }
         >
-          + Image
+          Import Image
         </button>
       </div>
 
@@ -183,7 +293,9 @@ function DevicePalette({
           placeholder="Search devices..."
           value={search}
           onChange={(event) =>
-            setSearch(event.target.value)
+            setSearch(
+              event.target.value
+            )
           }
         />
       </div>
@@ -192,27 +304,38 @@ function DevicePalette({
       <div className="palette-content">
         <DeviceSection
           title="Infrastructure"
-          devices={infrastructure}
+          devices={
+            infrastructure
+          }
         />
 
         <DeviceSection
           title="Endpoints"
-          devices={endpoints}
+          devices={
+            endpoints
+          }
         />
 
 
-        {vendors.map((vendor) => (
-          <DeviceSection
-            key={vendor}
-            title={vendor}
-            devices={
-              appliances.filter(
-                (device) =>
-                  device.vendor === vendor
-              )
-            }
-          />
-        ))}
+        {vendors.map(
+          (vendor) => (
+            <DeviceSection
+              key={vendor}
+              title={
+                formatVendor(
+                  vendor
+                )
+              }
+              devices={
+                appliances.filter(
+                  (device) =>
+                    device.vendor
+                    === vendor
+                )
+              }
+            />
+          )
+        )}
 
 
         {!filteredDevices.length && (
