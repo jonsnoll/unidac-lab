@@ -76,10 +76,14 @@ if catalog["runtime"] != "iol":
         "Unexpected runtime provider"
     )
 
-if catalog.get("enabled") is not False:
+if catalog.get("enabled") is not True:
     raise SystemExit(
-        "IOL template must remain disabled "
-        "until runtime provider is ready"
+        "IOL L2 template must be enabled"
+    )
+
+if catalog.get("availability") != "available":
+    raise SystemExit(
+        "IOL L2 availability mismatch"
     )
 
 print("Metadata SHA256: PASS")

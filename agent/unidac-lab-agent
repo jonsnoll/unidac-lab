@@ -3262,6 +3262,294 @@ def link_netem_set(
     )
 
 
+
+IOLCTL = Path(
+    "/usr/local/libexec/unidac-lab-iolctl"
+)
+
+IOL_INSTANCE_RE = re.compile(
+    r"^ulab-iol-[a-z0-9][a-z0-9-]{0,47}$"
+)
+
+IOL_TEMPLATES = {
+    "cisco-iol-l2-switch": {
+        "image": PROJECT_ROOT
+        / "images/store/cisco/"
+        "cisco-iol-l2-adventerprise-15-1-20140814/base.bin",
+        "nvram_kb": 256,
+    },
+    "cisco-iol-l3-switch": {
+        "image": PROJECT_ROOT
+        / "images/store/cisco/"
+        "cisco-iol-l3-switch/base.bin",
+        "nvram_kb": 512,
+    },
+}
+
+
+def validate_iol_instance(instance):
+    if not IOL_INSTANCE_RE.fullmatch(
+        instance or ""
+    ):
+        fail(
+            "Instancia IOL fora do namespace "
+            "gerenciado: "
+            f"{instance}"
+        )
+
+
+def run_iolctl(*args):
+    require_root()
+
+    if not IOLCTL.is_file():
+        fail(
+            "iolctl nao encontrado: "
+            f"{IOLCTL}"
+        )
+
+    process = subprocess.run(
+        [str(IOLCTL), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
+    )
+
+    stdout = process.stdout.strip()
+    stderr = process.stderr.strip()
+
+    data = None
+    if stdout:
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError:
+            data = None
+
+    if process.returncode != 0:
+        if isinstance(data, dict):
+            message = data.get("message")
+            if message:
+                fail(message)
+
+        fail(
+            stderr
+            or stdout
+            or "iolctl falhou."
+        )
+
+    if not isinstance(data, dict):
+        fail(
+            "iolctl retornou resposta JSON invalida."
+        )
+
+    return data
+
+
+def list_iol_instances():
+    data = run_iolctl("list")
+    return data.get("instances", [])
+
+
+def iol_instance_exists(instance):
+    return any(
+        item.get("instance") == instance
+        for item in list_iol_instances()
+    )
+
+
+def iol_status_command(instance):
+    validate_iol_instance(instance)
+
+    if not iol_instance_exists(instance):
+        output(
+            {
+                "status": "missing",
+                "instance": instance,
+                "state": "missing",
+                "running": False,
+                "provider": "iol",
+            }
+        )
+        return
+
+    data = run_iolctl(
+        "status",
+        "--instance",
+        instance,
+    )
+    data["status"] = "exists"
+    data["provider"] = "iol"
+    output(data)
+
+
+def iol_ensure_command(
+    instance,
+    template_id,
+    memory_mb_value,
+    interfaces_value,
+):
+    validate_iol_instance(instance)
+
+    template = IOL_TEMPLATES.get(
+        template_id
+    )
+    if template is None:
+        fail(
+            "Template IOL nao permitido: "
+            f"{template_id}"
+        )
+
+    try:
+        memory_mb = int(memory_mb_value)
+        interfaces = int(interfaces_value)
+    except ValueError:
+        fail("Recursos IOL invalidos.")
+
+    if memory_mb < 128 or memory_mb > 4096:
+        fail("Memoria IOL fora do limite.")
+
+    if interfaces < 4 or interfaces > 16:
+        fail("Quantidade de interfaces IOL fora do limite 4..16.")
+
+    image = template["image"].resolve()
+    if not image.is_file():
+        fail(
+            "Imagem IOL do template nao encontrada: "
+            f"{image}"
+        )
+
+    if iol_instance_exists(instance):
+        manifest = run_iolctl(
+            "inspect",
+            "--instance",
+            instance,
+        )
+
+        current_image = (
+            manifest.get("image", {})
+            .get("path")
+        )
+
+        if not current_image:
+            fail("Manifest IOL sem image.path.")
+
+        if Path(current_image).resolve() != image:
+            fail(
+                "Instancia IOL existente usa imagem diferente."
+            )
+
+        if int(manifest.get("memory_mb", 0)) != memory_mb:
+            fail(
+                "Instancia IOL existente usa memoria diferente. "
+                "Remova o runtime antes de alterar recursos."
+            )
+
+        if int(manifest.get("ethernet_ports", 0)) != interfaces:
+            fail(
+                "Instancia IOL existente usa numero de interfaces diferente. "
+                "Remova o runtime antes de alterar recursos."
+            )
+
+        status = run_iolctl(
+            "status",
+            "--instance",
+            instance,
+        )
+
+        output(
+            {
+                "status": "exists",
+                "instance": instance,
+                "provider": "iol",
+                "running": bool(status.get("running")),
+                "state": status.get("manifest_state"),
+                "image": str(image),
+                "memory_mb": memory_mb,
+                "interfaces": interfaces,
+            }
+        )
+        return
+
+    result = run_iolctl(
+        "prepare",
+        "--instance",
+        instance,
+        "--image",
+        str(image),
+        "--ethernet-ports",
+        str(interfaces),
+        "--memory-mb",
+        str(memory_mb),
+        "--nvram-kb",
+        str(template["nvram_kb"]),
+    )
+
+    output(
+        {
+            "status": "prepared",
+            "instance": instance,
+            "provider": "iol",
+            "running": False,
+            "state": "prepared",
+            "result": result,
+        }
+    )
+
+
+def iol_start_command(instance):
+    validate_iol_instance(instance)
+    if not iol_instance_exists(instance):
+        fail("Runtime IOL ainda nao existe. Execute Apply Changes primeiro.")
+    output(run_iolctl("start", "--instance", instance))
+
+
+def iol_stop_command(instance):
+    validate_iol_instance(instance)
+    if not iol_instance_exists(instance):
+        fail("Runtime IOL nao encontrado.")
+    output(run_iolctl("stop", "--instance", instance))
+
+
+def iol_restart_command(instance):
+    validate_iol_instance(instance)
+    if not iol_instance_exists(instance):
+        fail("Runtime IOL nao encontrado.")
+    run_iolctl("stop", "--instance", instance)
+    output(run_iolctl("start", "--instance", instance))
+
+
+def iol_remove_command(instance):
+    validate_iol_instance(instance)
+
+    if not iol_instance_exists(instance):
+        output(
+            {
+                "status": "missing",
+                "instance": instance,
+                "provider": "iol",
+            }
+        )
+        return
+
+    status = run_iolctl(
+        "status",
+        "--instance",
+        instance,
+    )
+
+    if status.get("running"):
+        fail(
+            "Runtime IOL precisa estar desligado antes da remocao."
+        )
+
+    output(
+        run_iolctl(
+            "remove-prepared",
+            "--instance",
+            instance,
+        )
+    )
+
 def main():
     if len(sys.argv) < 2:
         fail(
@@ -3392,6 +3680,50 @@ def main():
 
         return
 
+
+    if command == "iol-status":
+        if len(sys.argv) != 3:
+            fail("Uso: iol-status <instance>")
+        iol_status_command(sys.argv[2])
+        return
+
+    if command == "iol-ensure":
+        if len(sys.argv) != 6:
+            fail(
+                "Uso: iol-ensure <instance> <template-id> "
+                "<memory-mb> <interfaces>"
+            )
+        iol_ensure_command(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+        )
+        return
+
+    if command == "iol-start":
+        if len(sys.argv) != 3:
+            fail("Uso: iol-start <instance>")
+        iol_start_command(sys.argv[2])
+        return
+
+    if command == "iol-stop":
+        if len(sys.argv) != 3:
+            fail("Uso: iol-stop <instance>")
+        iol_stop_command(sys.argv[2])
+        return
+
+    if command == "iol-restart":
+        if len(sys.argv) != 3:
+            fail("Uso: iol-restart <instance>")
+        iol_restart_command(sys.argv[2])
+        return
+
+    if command == "iol-remove":
+        if len(sys.argv) != 3:
+            fail("Uso: iol-remove <instance>")
+        iol_remove_command(sys.argv[2])
+        return
 
     if command == "capture-start":
         if len(sys.argv) != 6:

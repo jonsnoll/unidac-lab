@@ -42,8 +42,40 @@ def resolve_console_domain(
         ) not in {
             "create-vm",
             "reuse-vm",
+            "create-iol",
+            "reuse-iol",
         }:
             continue
+
+        if action.get("action") in {
+            "create-iol",
+            "reuse-iol",
+        }:
+            if action.get("action") == "create-iol":
+                raise ConsoleError(
+                    "Runtime IOL ainda nao existe. "
+                    "Execute Apply Changes primeiro.",
+                    kind="runtime-not-created",
+                )
+
+            instance_name = action.get(
+                "instance_name"
+            )
+
+            if not instance_name:
+                raise ConsoleError(
+                    "Apply Plan IOL sem instance_name.",
+                    kind="invalid-runtime",
+                )
+
+            return {
+                "node_id": node_id,
+                "node_name": action.get("node_name"),
+                "domain_name": f"iol:{instance_name}",
+                "runtime_ownership": "managed",
+                "runtime_provider": "iol",
+            }
+
 
         domain_name = action.get(
             "domain_name"

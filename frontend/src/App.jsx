@@ -519,6 +519,20 @@ function App() {
           let realNodeId = null
 
 
+          if (action.runtime_id) {
+            if (action.runtime_state) {
+              runtimeByDesiredId[
+                action.node_id
+              ] = {
+                id: action.runtime_id,
+                state: action.runtime_state,
+              }
+            }
+
+            continue
+          }
+
+
           if (action.domain_name) {
             realNodeId =
               `vm:${action.domain_name}`
@@ -1195,14 +1209,40 @@ function App() {
           'remove-runtime'
 
 
+        const desiredNode =
+          (desiredTopology?.nodes || [])
+            .find(
+              (item) =>
+                item.id === nodeId
+            )
+
+
+        const device =
+          catalogDevices.find(
+            (item) =>
+              item.id ===
+              desiredNode?.template_id
+          )
+
+
+        const isIol =
+          device?.runtime === 'iol'
+
+
+        const runtimeBase =
+          isIol
+            ? '/api/lab/iol/nodes'
+            : '/api/lab/nodes'
+
+
         const endpoint =
           removeRuntime
-            ? `/api/lab/nodes/${
+            ? `${runtimeBase}/${
                 encodeURIComponent(
                   nodeId
                 )
               }/runtime`
-            : `/api/lab/nodes/${
+            : `${runtimeBase}/${
                 encodeURIComponent(
                   nodeId
                 )
@@ -1260,11 +1300,14 @@ function App() {
          * assincronos, e o polling
          * continuara acompanhando.
          */
-        await refreshRuntimeStates()
-
-
-        if (removeRuntime) {
+        if (isIol) {
           window.location.reload()
+        } else {
+          await refreshRuntimeStates()
+
+          if (removeRuntime) {
+            window.location.reload()
+          }
         }
 
 
@@ -1272,6 +1315,8 @@ function App() {
       },
       [
         refreshRuntimeStates,
+        desiredTopology,
+        catalogDevices,
       ]
     )
 

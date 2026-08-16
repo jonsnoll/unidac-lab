@@ -66,6 +66,12 @@ ALLOWED_COMMANDS = {
     "vm-shutdown",
     "vm-restart",
     "vm-undefine",
+    "iol-status",
+    "iol-ensure",
+    "iol-start",
+    "iol-stop",
+    "iol-restart",
+    "iol-remove",
     "capture-start",
     "capture-stop",
     "capture-status",
@@ -414,6 +420,123 @@ def validate_console_domain(
             f"Estado atual: {state}"
         )
 
+
+IOLCTL = "/usr/local/libexec/unidac-lab-iolctl"
+IOL_INSTANCE_RE = re.compile(
+    r"^ulab-iol-[a-z0-9][a-z0-9-]{0,47}$"
+)
+
+
+def iol_console_target(instance):
+    if not IOL_INSTANCE_RE.fullmatch(
+        instance or ""
+    ):
+        raise RuntimeError(
+            "Instancia IOL fora do namespace gerenciado."
+        )
+
+    process = subprocess.run(
+        [
+            IOLCTL,
+            "status",
+            "--instance",
+            instance,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+
+    if process.returncode != 0:
+        raise RuntimeError(
+            process.stderr.strip()
+            or process.stdout.strip()
+            or "Falha ao consultar runtime IOL."
+        )
+
+    try:
+        status = json.loads(
+            process.stdout
+        )
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "Resposta invalida do provider IOL."
+        ) from error
+
+    if not status.get("running"):
+        raise RuntimeError(
+            "Console disponivel somente com IOL running."
+        )
+
+    console = status.get("console", {})
+    host = console.get("host")
+    port = console.get("port")
+
+    if host != "127.0.0.1":
+        raise RuntimeError(
+            "Console IOL precisa permanecer em localhost."
+        )
+
+    if not isinstance(port, int) or not (1024 <= port <= 65535):
+        raise RuntimeError(
+            "Porta de console IOL invalida."
+        )
+
+    return host, port
+
+
+def handle_iol_console(
+    connection,
+    instance,
+):
+    host, port = iol_console_target(
+        instance
+    )
+
+    runtime = socket.create_connection(
+        (host, port),
+        timeout=10,
+    )
+    runtime.settimeout(None)
+
+    try:
+        send_json(
+            connection,
+            {
+                "ok": True,
+                "mode": "console",
+                "domain": f"iol:{instance}",
+                "provider": "iol",
+            },
+        )
+
+        while True:
+            readable, _, _ = select.select(
+                [connection, runtime],
+                [],
+                [],
+                0.5,
+            )
+
+            if connection in readable:
+                data = connection.recv(4096)
+                if not data:
+                    break
+                runtime.sendall(data)
+
+            if runtime in readable:
+                data = runtime.recv(4096)
+                if not data:
+                    break
+                connection.sendall(data)
+
+    finally:
+        try:
+            runtime.close()
+        except Exception:
+            pass
+
 def handle_console(
     connection,
     request,
@@ -421,6 +544,17 @@ def handle_console(
     domain_name = request.get(
         "domain"
     )
+
+    if (
+        isinstance(domain_name, str)
+        and
+        domain_name.startswith("iol:")
+    ):
+        handle_iol_console(
+            connection,
+            domain_name[4:],
+        )
+        return
 
     validate_console_domain(
         domain_name

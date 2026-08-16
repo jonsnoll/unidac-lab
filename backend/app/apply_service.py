@@ -7,6 +7,7 @@ from app.agent_client import (
     ensure_network,
     ensure_overlay,
     ensure_vm,
+    ensure_iol,
 )
 from app.apply_plan_service import (
     LAB_ID,
@@ -137,6 +138,32 @@ def execute_apply():
             action_type = action.get(
                 "action"
             )
+
+
+            # Cisco IOL core runtime.
+            # Apply apenas prepara/reutiliza a instancia.
+            # Nao envia configuracao IOS e nao conecta dataplane nesta fase.
+            if action_type in {
+                "create-iol",
+                "reuse-iol",
+            }:
+                result = ensure_iol(
+                    action["instance_name"],
+                    action["template_id"],
+                    action["memory_mb"],
+                    action["interfaces"],
+                )
+
+                results.append(
+                    {
+                        "step": "iol",
+                        "node_id": action["node_id"],
+                        "node_name": action["node_name"],
+                        "result": result,
+                    }
+                )
+
+                continue
 
             if (
                 action_type

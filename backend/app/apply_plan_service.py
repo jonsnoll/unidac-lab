@@ -2,6 +2,10 @@
 import re
 
 
+from app.agent_client import (
+    AgentError,
+    iol_status,
+)
 from app.catalog_service import get_device
 from app.desired_topology_service import (
     get_desired_topology,
@@ -52,6 +56,21 @@ def runtime_domain_name(node):
 
     return (
         f"ulab-{name}-{token}"
+    )
+
+
+
+def runtime_iol_name(node):
+    token = node_token(
+        node["id"]
+    )[:4]
+
+    name = slugify(
+        node["name"]
+    )[:32]
+
+    return (
+        f"ulab-iol-{name}-{token}"
     )
 
 
@@ -463,6 +482,137 @@ def build_apply_plan():
                             "managed",
                     }
                 )
+
+    # IOL / Cisco core runtime.
+    #
+    # O core IOL e reconciliado sem bindings de rede.
+    # Links desenhados permanecem no Desired State, mas o
+    # dataplane sera aplicado somente na etapa especifica.
+    for node in nodes:
+        device = get_device(
+            node["template_id"]
+        )
+
+        if device is None:
+            continue
+
+        if device.get("runtime") != "iol":
+            continue
+
+        properties = node.get(
+            "properties",
+            {},
+        )
+
+        memory_mb = int(
+            properties.get(
+                "memory_mb",
+                device.get("defaults", {}).get(
+                    "memory_mb",
+                    256,
+                ),
+            )
+        )
+
+        interfaces = int(
+            properties.get(
+                "interfaces",
+                device.get("defaults", {}).get(
+                    "interfaces",
+                    8,
+                ),
+            )
+        )
+
+        if interfaces < 4 or interfaces > 16:
+            errors.append(
+                {
+                    "type": "invalid-iol-interfaces",
+                    "node_id": node["id"],
+                    "node_name": node["name"],
+                    "message": (
+                        f"{node['name']}: interfaces IOL precisam estar entre 4 e 16."
+                    ),
+                }
+            )
+            continue
+
+        instance_name = runtime_iol_name(
+            node
+        )
+
+        try:
+            status = iol_status(
+                instance_name
+            )
+        except AgentError as error:
+            errors.append(
+                {
+                    "type": "iol-status-error",
+                    "node_id": node["id"],
+                    "node_name": node["name"],
+                    "message": f"Falha ao consultar IOL: {error}",
+                }
+            )
+            continue
+
+        exists = (
+            status.get("status")
+            != "missing"
+        )
+
+        runtime_state = None
+        if exists:
+            runtime_state = (
+                "running"
+                if status.get("running")
+                else "shutoff"
+            )
+
+        connected_links = [
+            link
+            for link in links
+            if (
+                link.get("source") == node["id"]
+                or
+                link.get("target") == node["id"]
+            )
+        ]
+
+        if connected_links:
+            warnings.append(
+                {
+                    "type": "iol-dataplane-pending",
+                    "node_id": node["id"],
+                    "node_name": node["name"],
+                    "message": (
+                        "Links IOL foram preservados no Desired State, "
+                        "mas ainda nao sao aplicados ao runtime."
+                    ),
+                }
+            )
+
+        actions.append(
+            {
+                "order": 45,
+                "action": (
+                    "reuse-iol"
+                    if exists
+                    else "create-iol"
+                ),
+                "node_id": node["id"],
+                "node_name": node["name"],
+                "template_id": node["template_id"],
+                "instance_name": instance_name,
+                "runtime_id": f"iol:{instance_name}",
+                "runtime_state": runtime_state,
+                "memory_mb": memory_mb,
+                "interfaces": interfaces,
+                "runtime_provider": "iol",
+                "runtime_ownership": "managed",
+                "dataplane": "pending",
+            }
+        )
 
     # QEMU / appliances / endpoints.
     for node in nodes:

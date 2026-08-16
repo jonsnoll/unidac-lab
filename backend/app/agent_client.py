@@ -158,6 +158,61 @@ def _run_agent_cli(
     return response
 
 
+
+def iol_status(instance):
+    return run_agent(
+        "iol-status",
+        instance,
+    )
+
+
+def ensure_iol(
+    instance,
+    template_id,
+    memory_mb,
+    interfaces,
+):
+    return run_agent(
+        "iol-ensure",
+        instance,
+        template_id,
+        str(memory_mb),
+        str(interfaces),
+        timeout=300,
+    )
+
+
+def iol_start(instance):
+    return run_agent(
+        "iol-start",
+        instance,
+        timeout=300,
+    )
+
+
+def iol_stop(instance):
+    return run_agent(
+        "iol-stop",
+        instance,
+        timeout=300,
+    )
+
+
+def iol_restart(instance):
+    return run_agent(
+        "iol-restart",
+        instance,
+        timeout=300,
+    )
+
+
+def iol_remove(instance):
+    return run_agent(
+        "iol-remove",
+        instance,
+        timeout=300,
+    )
+
 def agent_health():
     return run_agent(
         "health"

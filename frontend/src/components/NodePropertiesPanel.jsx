@@ -67,6 +67,10 @@ function NodePropertiesPanel({
     device?.runtime === 'qemu'
 
 
+  const isIol =
+    device?.runtime === 'iol'
+
+
   const compatibleImages =
     useMemo(
       () =>
@@ -449,7 +453,7 @@ function NodePropertiesPanel({
         )}
 
 
-        {isQemu && runtimeId && (
+        {(isQemu || isIol) && runtimeId && (
           <>
             <div className="properties-section-title">
               Runtime
@@ -480,12 +484,12 @@ function NodePropertiesPanel({
 
               <div>
                 <span>
-                  Domain
+                  {isIol ? 'Instance' : 'Domain'}
                 </span>
 
                 <code>
                   {runtimeId.replace(
-                    /^vm:/,
+                    /^(vm|iol):/,
                     ''
                   )}
                 </code>
@@ -619,9 +623,11 @@ function NodePropertiesPanel({
                       onClick={async () => {
                         const confirmed =
                           window.confirm(
-                            'Remove only the runtime VM?\n\n' +
-                            'The QCOW2 overlay and planned device ' +
-                            'will be preserved.'
+                            isIol
+                              ? 'Remove the prepared Cisco IOL runtime?\n\n' +
+                                'The Cisco image and planned device will be preserved.'
+                              : 'Remove only the runtime VM?\n\n' +
+                                'The QCOW2 overlay and planned device will be preserved.'
                           )
 
 
@@ -644,7 +650,9 @@ function NodePropertiesPanel({
                     </button>
 
                     <small>
-                      Overlay disk will be preserved.
+                      {isIol
+                        ? 'Cisco image will be preserved.'
+                        : 'Overlay disk will be preserved.'}
                     </small>
                   </div>
                 )

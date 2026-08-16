@@ -7,13 +7,13 @@
   "kind": "network-appliance",
   "runtime": "iol",
   "driver": "cisco-iol",
-  "description": "Cisco IOL Layer 2 switch. Runtime IOL em preparacao.",
+  "description": "Cisco IOL Layer 2 com core runtime, lifecycle e console habilitados. Dataplane conectado ainda pendente.",
   "image_required": true,
   "image_types": [
     "bin"
   ],
-  "enabled": false,
-  "availability": "coming-soon",
+  "enabled": true,
+  "availability": "available",
   "defaults": {
     "memory_mb": 256,
     "interfaces": 8

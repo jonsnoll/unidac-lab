@@ -12,6 +12,8 @@ LAB_NAME = "vxlan-fgt-01"
 LIBVIRT_URI = "qemu:///system"
 
 
+from app.iol_router import router as iol_router
+
 app = FastAPI(
     title="unidac-lab API",
     description="API para gerenciamento e observacao de laboratorios de rede",
@@ -213,3 +215,5 @@ app.include_router(apply_router)
 app.include_router(console_router)
 app.include_router(capture_router)
 app.include_router(link_impairment_router)
+
+app.include_router(iol_router)
