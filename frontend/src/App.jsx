@@ -878,6 +878,25 @@ function App() {
             (currentNodes) =>
               currentNodes.map(
                 (flowNode) => {
+                /*
+                 * IOL nao pertence ao topology/libvirt.
+                 *
+                 * O estado deste node e responsabilidade exclusiva
+                 * do polling /api/lab/apply-plan abaixo.
+                 *
+                 * Sem este guard o topology poll procurava
+                 * iol:* em topologyMap, nao encontrava e zerava
+                 * runtimeState. O polling IOL restaurava RUNNING
+                 * logo depois, causando PLANNED <-> RUNNING.
+                 */
+                if (
+                  flowNode.data
+                    ?.runtime === 'iol'
+                ) {
+                  return flowNode
+                }
+
+
                   const runtimeId =
                     flowNode.data
                       ?.runtimeId
