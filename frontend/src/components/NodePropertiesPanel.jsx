@@ -453,7 +453,7 @@ function NodePropertiesPanel({
         )}
 
 
-        {(isQemu || isIol) && runtimeId && (
+        {(isQemu || isIol) && runtimeAvailable && (
           <>
             <div className="properties-section-title">
               Runtime

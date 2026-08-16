@@ -971,6 +971,155 @@ function App() {
   ])
 
 
+  /*
+   * IOL nao aparece no topology_service/libvirt.
+   *
+   * O estado runtime do Cisco vem do Apply Plan, que por sua vez
+   * consulta o provider IOL via AgentD.
+   *
+   * Sem este polling o canvas ficava PLANNED/UNKNOWN mesmo com
+   * a instancia IOL em running.
+   */
+  useEffect(() => {
+    let cancelled = false
+
+
+    async function refreshIolRuntimeStates() {
+      try {
+        const response = await fetch(
+          '/api/lab/apply-plan'
+        )
+
+
+        if (!response.ok) {
+          return
+        }
+
+
+        const plan =
+          await response.json()
+
+
+        if (cancelled) {
+          return
+        }
+
+
+        const iolByDesiredId = {}
+
+        for (
+          const action
+          of plan.actions || []
+        ) {
+          if (
+            !action.runtime_id ||
+            !action.runtime_id.startsWith(
+              'iol:'
+            )
+          ) {
+            continue
+          }
+
+
+          iolByDesiredId[
+            action.node_id
+          ] = {
+            id:
+              action.runtime_id,
+
+            state:
+              action.runtime_state ||
+              null,
+          }
+        }
+
+
+        setNodes(
+          (currentNodes) =>
+            currentNodes.map(
+              (flowNode) => {
+                if (
+                  flowNode.data
+                    ?.runtime !== 'iol'
+                ) {
+                  return flowNode
+                }
+
+
+                const runtime =
+                  iolByDesiredId[
+                    flowNode.id
+                  ]
+
+
+                const nextRuntimeId =
+                  runtime?.id ||
+                  null
+
+                const nextRuntimeState =
+                  runtime?.state ||
+                  null
+
+
+                if (
+                  flowNode.data
+                    ?.runtimeId ===
+                    nextRuntimeId
+                  &&
+                  flowNode.data
+                    ?.runtimeState ===
+                    nextRuntimeState
+                ) {
+                  return flowNode
+                }
+
+
+                return {
+                  ...flowNode,
+
+                  data: {
+                    ...flowNode.data,
+
+                    runtimeId:
+                      nextRuntimeId,
+
+                    runtimeState:
+                      nextRuntimeState,
+                  },
+                }
+              }
+            )
+        )
+
+      } catch {
+        /*
+         * Poll de runtime nao deve derrubar
+         * o editor caso o backend esteja
+         * momentaneamente indisponivel.
+         */
+      }
+    }
+
+
+    refreshIolRuntimeStates()
+
+    const interval =
+      window.setInterval(
+        refreshIolRuntimeStates,
+        2000,
+      )
+
+
+    return () => {
+      cancelled = true
+
+      window.clearInterval(
+        interval
+      )
+    }
+  }, [setNodes])
+
+
   const saveLayout = useCallback(
     async (currentNodes) => {
       const payload = {
@@ -2269,11 +2418,18 @@ function App() {
 
       {showApplyPlan && (
         <ApplyPlanModal
-          onClose={() =>
+          onClose={() => {
             setShowApplyPlan(
               false
             )
-          }
+
+            /*
+             * O botao do modal diz "Close and Refresh".
+             * Recarregar garante reconciliacao imediata
+             * de runtimes fora do libvirt, como IOL.
+             */
+            window.location.reload()
+          }}
         />
       )}
 
