@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "cisco-iol-l3-switch",
+  "name": "Cisco IOL L3 Switch",
+  "vendor": "cisco",
+  "category": "switch",
+  "kind": "network-appliance",
+  "runtime": "iol",
+  "driver": "cisco-iol",
+  "description": "Cisco IOL Layer 3. Boot e console validados; dataplane conectado ainda pendente.",
+  "image_required": true,
+  "image_types": [
+    "bin"
+  ],
+  "enabled": false,
+  "availability": "coming-soon",
+  "defaults": {
+    "memory_mb": 512,
+    "interfaces": 8
+  },
+  "interfaces": {
+    "prefix": "Ethernet",
+    "minimum": 4,
+    "default": 8,
+    "maximum": 16,
+    "mode": "dynamic"
+  },
+  "console": "serial"
+}

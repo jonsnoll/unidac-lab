@@ -72,3 +72,18 @@ transport has a bidirectional smoke test.
 This ordering also mirrors the separation used by GNS3: IOU is
 started and its console is established before IOL networking is
 attached.
+
+## Per-image legacy crypto dependency
+
+The IOL provider no longer assumes every IOL ELF requires
+`libcrypto.so.4`.
+
+`private_compat_check()` now evaluates the actual `ldd` output:
+
+- when `libcrypto.so.4` is required, it must resolve from the private
+  compatibility directory;
+- when the image does not depend on it, the compatibility check passes
+  without inventing a dependency.
+
+This permits newer/different IOL images to share the same provider
+without weakening dependency validation.

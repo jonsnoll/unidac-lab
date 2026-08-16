@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "cisco-iol-l3-switch-image",
+  "name": "Cisco IOL L3 Switch Image",
+  "vendor": "cisco",
+  "version": "15.5.2T",
+  "kind": "executable-image",
+  "format": "bin",
+  "deployment": "iol-executable",
+  "description": "Imagem IOL L3 fornecida pelo usuario para laboratorio.",
+  "compatible_templates": [
+    "cisco-iol-l3-switch"
+  ],
+  "storage": {
+    "relative_path": "images/store/cisco/cisco-iol-l3-switch/base.bin",
+    "read_only_base": true
+  },
+  "integrity": {
+    "sha256": "dc74c28bfb45e8298ce220aedb21940d1f5e7c5d1967d13da5e339741c9619a9"
+  },
+  "image_info": {
+    "file_size_bytes": 172982492,
+    "file": "ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, for GNU/Linux 2.6.9, stripped"
+  },
+  "validation": {
+    "core_boot": true,
+    "console": true,
+    "dataplane": false,
+    "automatic_ios_configuration": false
+  }
+}

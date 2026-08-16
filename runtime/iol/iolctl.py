@@ -388,16 +388,30 @@ def private_compat_check(
             + output
         )
 
+    legacy_crypto_name = (
+        "libcrypto.so.4"
+    )
+
+    legacy_crypto_path = str(
+        DEFAULT_COMPAT_LIB
+        / legacy_crypto_name
+    )
+
+    legacy_crypto_required = (
+        legacy_crypto_name
+        in output
+    )
+
     if (
-        str(
-            DEFAULT_COMPAT_LIB
-            / "libcrypto.so.4"
-        )
+        legacy_crypto_required
+        and
+        legacy_crypto_path
         not in output
     ):
         fail(
-            "libcrypto.so.4 nao foi resolvida "
-            "pelo private compat dir."
+            "libcrypto.so.4 e requerida "
+            "pela imagem, mas nao foi "
+            "resolvida pelo private compat dir."
         )
 
     return {
@@ -409,10 +423,19 @@ def private_compat_check(
                 DEFAULT_COMPAT_LIB
             ),
 
+        "libcrypto_required":
+            legacy_crypto_required,
+
+        "libcrypto_source":
+            (
+                legacy_crypto_path
+                if legacy_crypto_required
+                else "not-required"
+            ),
+
         "ios_started":
             False,
     }
-
 
 def ensure_state_dirs(
     state_dir,
