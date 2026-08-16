@@ -47,3 +47,28 @@ the next stage.
 The runtime requires a user-supplied authorized iourc.
 
 No license generation is implemented.
+
+## First-boot core mode
+
+The first controlled boot failed before the Cisco process was
+started because the experimental Linux TAP relay failed inside
+uBridge.
+
+The runtime is now split into two milestones:
+
+1. process/console/lifecycle core;
+2. connected dataplane.
+
+For a core instance with no network bindings the provider uses
+the IOL `-N` option to ignore NETMAP and does not start uBridge.
+
+This intentionally isolates first boot from networking so that
+process startup, the user-supplied license, console transport and
+restart behavior can be validated independently.
+
+Connected IOL dataplane startup is temporarily blocked until its
+transport has a bidirectional smoke test.
+
+This ordering also mirrors the separation used by GNS3: IOU is
+started and its console is established before IOL networking is
+attached.

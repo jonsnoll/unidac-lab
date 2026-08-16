@@ -7,10 +7,10 @@ import os
 from pathlib import Path
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
+import traceback
 
 
 STATE_ROOT = Path(
@@ -23,10 +23,6 @@ RUN_ROOT = Path(
 
 COMPAT_LIB = Path(
     "/opt/unidac-lab/iol-compat/lib"
-)
-
-UBRIDGE = Path(
-    "/usr/local/bin/ubridge"
 )
 
 
@@ -139,349 +135,15 @@ def check_license(path):
         )
 
 
-def write_netmap(
-    directory,
-    application_id,
-):
-    bridge_id = (
-        application_id
-        + 512
-    )
-
-    path = (
-        directory
-        / "NETMAP"
-    )
-
-    lines = []
-
-    for bay in range(
-        0,
-        16,
-    ):
-        for unit in range(
-            0,
-            4,
-        ):
-            lines.append(
-                (
-                    f"{bridge_id}:"
-                    f"{bay}/{unit}"
-                    f"{application_id:>5d}:"
-                    f"{bay}/{unit}"
-                )
-            )
-
-    path.write_text(
-        "\n".join(
-            lines
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    os.chmod(
-        path,
-        0o644,
-    )
-
-    return path
-
-
-async def wait_tcp(
-    host,
-    port,
-    timeout=10,
-):
-    deadline = (
-        time.monotonic()
-        + timeout
-    )
-
-    while (
-        time.monotonic()
-        < deadline
-    ):
-        try:
-            reader, writer = (
-                await asyncio.open_connection(
-                    host,
-                    port,
-                )
-            )
-
-            writer.close()
-
-            await writer.wait_closed()
-
-            return
-
-        except OSError:
-            await asyncio.sleep(
-                0.1
-            )
-
-    fail(
-        f"TCP nao abriu em {host}:{port}"
-    )
-
-
-async def ubridge_command(
-    host,
-    port,
-    command,
-):
-    reader, writer = (
-        await asyncio.open_connection(
-            host,
-            port,
-        )
-    )
-
-    writer.write(
-        (
-            command
-            + "\n"
-        ).encode(
-            "utf-8"
-        )
-    )
-
-    await writer.drain()
-
-    lines = []
-
-    while True:
-        raw = await asyncio.wait_for(
-            reader.readline(),
-            timeout=5,
-        )
-
-        if not raw:
-            break
-
-        line = raw.decode(
-            "utf-8",
-            errors="replace",
-        ).rstrip()
-
-        lines.append(
-            line
-        )
-
-        if (
-            line.startswith(
-                "100-"
-            )
-            or line.startswith(
-                "200-"
-            )
-            or line.startswith(
-                "201-"
-            )
-            or line.startswith(
-                "202-"
-            )
-            or line.startswith(
-                "203-"
-            )
-            or line.startswith(
-                "204-"
-            )
-            or line.startswith(
-                "205-"
-            )
-            or line.startswith(
-                "206-"
-            )
-            or line.startswith(
-                "207-"
-            )
-            or line.startswith(
-                "208-"
-            )
-            or line.startswith(
-                "209-"
-            )
-        ):
-            break
-
-    writer.close()
-
-    await writer.wait_closed()
-
-    if not lines:
-        fail(
-            "uBridge nao respondeu a: "
-            + command
-        )
-
-    final = lines[-1]
-
-    if not final.startswith(
-        "100-"
-    ):
-        fail(
-            "uBridge rejeitou comando: "
-            + command
-            + " -> "
-            + " | ".join(
-                lines
-            )
-        )
-
-    return lines
-
-
-def port_to_bay_unit(
-    port_name,
-):
-    if not port_name.startswith(
-        "port"
-    ):
-        fail(
-            "Porta IOL invalida: "
-            + port_name
-        )
-
-    try:
-        index = int(
-            port_name[4:]
-        )
-
-    except ValueError:
-        fail(
-            "Porta IOL invalida: "
-            + port_name
-        )
-
-    if (
-        index < 1
-        or index > 64
-    ):
-        fail(
-            "Porta IOL fora do range: "
-            + port_name
-        )
-
-    zero = (
-        index - 1
-    )
-
-    return (
-        zero // 4,
-        zero % 4,
-    )
-
-
-def tap_name(
-    application_id,
-    port_name,
-):
-    port_index = int(
-        port_name[4:]
-    )
-
-    return (
-        f"ui{application_id:03d}"
-        f"p{port_index:02d}"
-    )
-
-
-async def ip_command(
-    *args,
-    check=True,
-):
-    process = await asyncio.create_subprocess_exec(
-        "ip",
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    output, _ = (
-        await process.communicate()
-    )
-
-    text = output.decode(
-        "utf-8",
-        errors="replace",
-    )
-
-    if (
-        check
-        and
-        process.returncode != 0
-    ):
-        fail(
-            "ip command falhou: "
-            + " ".join(args)
-            + "\n"
-            + text
-        )
-
-    return (
-        process.returncode,
-        text,
-    )
-
-
-async def create_tap(
-    name,
-    bridge,
-):
-    await ip_command(
-        "link",
-        "delete",
-        name,
-        check=False,
-    )
-
-    await ip_command(
-        "tuntap",
-        "add",
-        "dev",
-        name,
-        "mode",
-        "tap",
-    )
-
-    await ip_command(
-        "link",
-        "set",
-        name,
-        "up",
-    )
-
-    await ip_command(
-        "link",
-        "set",
-        name,
-        "master",
-        bridge,
-    )
-
-
-async def delete_tap(
-    name,
-):
-    await ip_command(
-        "link",
-        "delete",
-        name,
-        check=False,
-    )
-
-
 class ConsoleHub:
     def __init__(
         self,
         process,
+        log_handle,
     ):
         self.process = process
-
+        self.log_handle = log_handle
         self.clients = set()
-
         self.reader_task = None
 
     async def start(
@@ -563,6 +225,10 @@ class ConsoleHub:
             if not data:
                 return
 
+            self.log_handle.write(
+                data
+            )
+
             dead = []
 
             for writer in self.clients:
@@ -612,6 +278,19 @@ async def run_instance(
             )
         )
 
+    bindings = manifest.get(
+        "network_bindings",
+        []
+    )
+
+    if bindings:
+        fail(
+            "Dataplane IOL conectado esta "
+            "temporariamente bloqueado. "
+            "O first-boot core deve ser "
+            "executado sem network bindings."
+        )
+
     license_file = (
         manifest[
             "license_gate"
@@ -623,11 +302,6 @@ async def run_instance(
     check_license(
         license_file
     )
-
-    if not UBRIDGE.is_file():
-        fail(
-            "uBridge nao instalado."
-        )
 
     if not COMPAT_LIB.is_dir():
         fail(
@@ -678,34 +352,6 @@ async def run_instance(
         0o555,
     )
 
-    netmap = write_netmap(
-        directory,
-        application_id,
-    )
-
-    ubridge_port = int(
-        manifest[
-            "runtime"
-        ][
-            "ubridge_control_port"
-        ]
-    )
-
-    console_port = int(
-        manifest[
-            "runtime"
-        ][
-            "console_port"
-        ]
-    )
-
-    ubridge_log = open(
-        directory
-        / "ubridge.log",
-        "ab",
-        buffering=0,
-    )
-
     iou_log = open(
         directory
         / "iou.log",
@@ -713,214 +359,53 @@ async def run_instance(
         buffering=0,
     )
 
-    ubridge_process = (
-        await asyncio.create_subprocess_exec(
-            str(
-                UBRIDGE
-            ),
-            "-H",
-            (
-                "127.0.0.1:"
-                + str(
-                    ubridge_port
-                )
-            ),
-            cwd=str(
-                directory
-            ),
-            stdout=ubridge_log,
-            stderr=subprocess.STDOUT,
-        )
+    command = [
+        str(
+            executable
+        ),
+        "-e",
+        str(
+            manifest[
+                "ethernet_adapters"
+            ]
+        ),
+        "-s",
+        "0",
+        "-n",
+        str(
+            manifest[
+                "nvram_kb"
+            ]
+        ),
+        "-m",
+        str(
+            manifest[
+                "memory_mb"
+            ]
+        ),
+        "-N",
+        str(
+            application_id
+        ),
+    ]
+
+    env = os.environ.copy()
+
+    env[
+        "LD_LIBRARY_PATH"
+    ] = str(
+        COMPAT_LIB
     )
 
-    taps = []
+    env[
+        "IOURC"
+    ] = license_file
+
+    iou_process = None
+    console_server = None
+    hub = None
 
     try:
-        await wait_tcp(
-            "127.0.0.1",
-            ubridge_port,
-        )
-
-        bridge_id = (
-            application_id
-            + 512
-        )
-
-        iol_bridge = (
-            "IOL-BRIDGE-"
-            + str(
-                bridge_id
-            )
-        )
-
-        await ubridge_command(
-            "127.0.0.1",
-            ubridge_port,
-            (
-                "iol_bridge create "
-                + iol_bridge
-                + " "
-                + str(
-                    bridge_id
-                )
-            ),
-        )
-
-        for binding in manifest.get(
-            "network_bindings",
-            []
-        ):
-            port_name = binding[
-                "port"
-            ]
-
-            linux_bridge = binding[
-                "bridge"
-            ]
-
-            bay, unit = (
-                port_to_bay_unit(
-                    port_name
-                )
-            )
-
-            local_port = int(
-                binding[
-                    "udp_local"
-                ]
-            )
-
-            remote_port = int(
-                binding[
-                    "udp_remote"
-                ]
-            )
-
-            tap = tap_name(
-                application_id,
-                port_name,
-            )
-
-            await create_tap(
-                tap,
-                linux_bridge,
-            )
-
-            taps.append(
-                tap
-            )
-
-            await ubridge_command(
-                "127.0.0.1",
-                ubridge_port,
-                (
-                    "iol_bridge add_nio_udp "
-                    f"{iol_bridge} "
-                    f"{application_id} "
-                    f"{bay} "
-                    f"{unit} "
-                    f"{local_port} "
-                    "127.0.0.1 "
-                    f"{remote_port}"
-                ),
-            )
-
-            link_bridge = (
-                "ULAB-IOL-"
-                f"{application_id}-"
-                f"{bay}-{unit}"
-            )
-
-            await ubridge_command(
-                "127.0.0.1",
-                ubridge_port,
-                (
-                    "bridge create "
-                    + link_bridge
-                ),
-            )
-
-            await ubridge_command(
-                "127.0.0.1",
-                ubridge_port,
-                (
-                    "bridge add_nio_udp "
-                    f"{link_bridge} "
-                    f"{remote_port} "
-                    "127.0.0.1 "
-                    f"{local_port}"
-                ),
-            )
-
-            await ubridge_command(
-                "127.0.0.1",
-                ubridge_port,
-                (
-                    "bridge add_nio_tap "
-                    f"{link_bridge} "
-                    f"{tap}"
-                ),
-            )
-
-            await ubridge_command(
-                "127.0.0.1",
-                ubridge_port,
-                (
-                    "bridge start "
-                    + link_bridge
-                ),
-            )
-
-        await ubridge_command(
-            "127.0.0.1",
-            ubridge_port,
-            (
-                "iol_bridge start "
-                + iol_bridge
-            ),
-        )
-
-        command = [
-            str(
-                executable
-            ),
-            "-e",
-            str(
-                manifest[
-                    "ethernet_adapters"
-                ]
-            ),
-            "-s",
-            "0",
-            "-n",
-            str(
-                manifest[
-                    "nvram_kb"
-                ]
-            ),
-            "-m",
-            str(
-                manifest[
-                    "memory_mb"
-                ]
-            ),
-            str(
-                application_id
-            ),
-        ]
-
-        env = os.environ.copy()
-
-        env[
-            "LD_LIBRARY_PATH"
-        ] = str(
-            COMPAT_LIB
-        )
-
-        env[
-            "IOURC"
-        ] = license_file
-
         iou_process = (
             await asyncio.create_subprocess_exec(
                 *command,
@@ -953,10 +438,14 @@ async def run_instance(
         manifest[
             "runtime"
         ][
-            "netmap"
-        ] = str(
-            netmap
-        )
+            "dataplane_mode"
+        ] = "disabled-first-boot-core"
+
+        manifest[
+            "runtime"
+        ][
+            "command"
+        ] = command
 
         save_manifest(
             instance,
@@ -982,13 +471,20 @@ async def run_instance(
         )
 
         hub = ConsoleHub(
-            iou_process
+            iou_process,
+            iou_log,
         )
 
         console_server = (
             await hub.start(
                 "127.0.0.1",
-                console_port,
+                int(
+                    manifest[
+                        "runtime"
+                    ][
+                        "console_port"
+                    ]
+                ),
             )
         )
 
@@ -1051,9 +547,23 @@ async def run_instance(
 
                 await iou_process.wait()
 
-        console_server.close()
+        if console_server is not None:
+            console_server.close()
 
-        await console_server.wait_closed()
+            await console_server.wait_closed()
+
+        if (
+            hub is not None
+            and hub.reader_task is not None
+        ):
+            try:
+                await asyncio.wait_for(
+                    hub.reader_task,
+                    timeout=2,
+                )
+
+            except asyncio.TimeoutError:
+                hub.reader_task.cancel()
 
         manifest[
             "state"
@@ -1085,33 +595,6 @@ async def run_instance(
         )
 
     finally:
-        for tap in taps:
-            try:
-                await delete_tap(
-                    tap
-                )
-
-            except Exception:
-                pass
-
-        if (
-            ubridge_process.returncode
-            is None
-        ):
-            ubridge_process.terminate()
-
-            try:
-                await asyncio.wait_for(
-                    ubridge_process.wait(),
-                    timeout=3,
-                )
-
-            except asyncio.TimeoutError:
-                ubridge_process.kill()
-
-                await ubridge_process.wait()
-
-        ubridge_log.close()
         iou_log.close()
 
         pid_path = (
@@ -1150,6 +633,14 @@ def main():
         print(
             str(error),
             file=sys.stderr,
+            flush=True,
+        )
+
+        return 1
+
+    except Exception:
+        traceback.print_exc(
+            file=sys.stderr
         )
 
         return 1

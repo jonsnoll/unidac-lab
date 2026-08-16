@@ -858,7 +858,7 @@ def write_netmap(
 def runtime_command(
     manifest,
 ):
-    return [
+    command = [
         "iou.bin",
         "-e",
         str(
@@ -880,12 +880,25 @@ def runtime_command(
                 "memory_mb"
             ]
         ),
+    ]
+
+    if not manifest.get(
+        "network_bindings",
+        []
+    ):
+        command.append(
+            "-N"
+        )
+
+    command.append(
         str(
             manifest[
                 "application_id"
             ]
-        ),
-    ]
+        )
+    )
+
+    return command
 
 
 def daemon_pid_path(
@@ -1679,6 +1692,17 @@ def command_start(
         )
     )
 
+    if manifest.get(
+        "network_bindings",
+        []
+    ):
+        fail(
+            "Dataplane IOL conectado esta "
+            "temporariamente bloqueado. "
+            "Use uma instancia sem bindings "
+            "para o first-boot core."
+        )
+
     if not license_status[
         "configured"
     ]:
@@ -1742,6 +1766,10 @@ def command_start(
         stderr=subprocess.STDOUT,
         start_new_session=True,
         close_fds=True,
+        env={
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+        },
     )
 
     deadline = (

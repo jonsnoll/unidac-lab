@@ -7,6 +7,9 @@ IMAGE_ID="cisco-iol-l2-adventerprise-15-1-20140814"
 IMAGE="$PWD/images/store/cisco/$IMAGE_ID/base.bin"
 IOLCTL="/usr/local/libexec/unidac-lab-iolctl"
 INSTANCE="ulab-iol-plumbing-smoke"
+NO_LICENSE="/tmp/unidac-iol-plumbing-smoke-no-license"
+
+sudo rm -f "$NO_LICENSE"
 
 echo
 echo "=================================================="
@@ -20,6 +23,7 @@ sudo "$IOLCTL" \
   || true
 
 sudo "$IOLCTL" \
+  --license-file "$NO_LICENSE" \
   doctor \
   --image "$IMAGE" \
   > /tmp/iol-plumbing-doctor.json
@@ -74,6 +78,7 @@ sudo "$IOLCTL" \
   ubridge-self-test
 
 sudo "$IOLCTL" \
+  --license-file "$NO_LICENSE" \
   prepare \
   --instance "$INSTANCE" \
   --image "$IMAGE" \
@@ -231,14 +236,14 @@ if [ "$START_RC" -eq 0 ]; then
 fi
 
 if ! grep -Fq \
-  'Startup bloqueado pelo license gate' \
+  'Dataplane IOL conectado esta temporariamente bloqueado' \
   /tmp/iol-start-blocked.txt
 then
     echo "ERRO: start falhou por motivo inesperado."
     exit 1
 fi
 
-echo "License gate start block: PASS"
+echo "Connected dataplane start block: PASS"
 
 sudo "$IOLCTL" \
   remove-prepared \

@@ -8,6 +8,9 @@ IMAGE="$PWD/images/store/cisco/$IMAGE_ID/base.bin"
 
 IOLCTL="/usr/local/libexec/unidac-lab-iolctl"
 INSTANCE="ulab-iol-provider-smoke"
+NO_LICENSE="/tmp/unidac-iol-provider-smoke-no-license"
+
+sudo rm -f "$NO_LICENSE"
 
 echo
 echo "=================================================="
@@ -15,6 +18,7 @@ echo " IOL PROVIDER SMOKE"
 echo "=================================================="
 
 sudo "$IOLCTL" \
+  --license-file "$NO_LICENSE" \
   doctor \
   --image "$IMAGE" \
   > /tmp/iol-provider-doctor.json
@@ -88,6 +92,7 @@ sudo "$IOLCTL" \
   || true
 
 sudo "$IOLCTL" \
+  --license-file "$NO_LICENSE" \
   prepare \
   --instance "$INSTANCE" \
   --image "$IMAGE" \
