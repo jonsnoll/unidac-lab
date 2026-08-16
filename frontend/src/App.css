@@ -208,3 +208,116 @@ body {
 .apply-changes-button:hover {
   background: #2e6e47;
 }
+
+/* ===== v0.4 local branding polish ===== */
+
+.topbar {
+  min-height: 72px;
+  height: 72px;
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fbfcfd 100%
+    );
+  box-shadow:
+    0 1px 0 rgba(16, 24, 40, 0.04),
+    0 6px 20px rgba(16, 24, 40, 0.035);
+}
+
+.topbar h1 {
+  color: #111827;
+}
+
+.apply-changes-button {
+  border-radius: 8px;
+  box-shadow:
+    0 2px 6px rgba(34, 113, 73, 0.16);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
+}
+
+.apply-changes-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 14px rgba(34, 113, 73, 0.2);
+  filter: brightness(1.02);
+}
+
+.local-user-badge {
+  min-height: 42px;
+  padding: 5px 10px 5px 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e7ea;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(16, 24, 40, 0.04);
+  position: relative;
+}
+
+.local-user-badge > .status-dot {
+  position: absolute;
+  left: 31px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #ffffff;
+}
+
+.local-user-avatar {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      #eef6f1,
+      #dceee4
+    );
+  color: #2f7250;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.local-user-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.local-user-copy strong {
+  color: #202428;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.local-user-copy small {
+  color: #8b9298;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.canvas {
+  background:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(63, 143, 98, 0.035),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      rgba(73, 105, 142, 0.035),
+      transparent 30%
+    ),
+    #fafbfc;
+}

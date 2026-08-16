@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "id": "cisco-iol-l3-switch",
-  "name": "Cisco IOL L3 Switch",
+  "name": "L3 Router",
   "vendor": "cisco",
   "category": "switch",
   "kind": "network-appliance",
   "runtime": "iol",
   "driver": "cisco-iol",
-  "description": "Cisco IOL Layer 3 com core runtime, lifecycle e console habilitados. Dataplane conectado ainda pendente.",
+  "description": "Cisco IOL Layer 3 router para laboratorios. Boot, lifecycle e console disponiveis.",
   "image_required": true,
   "image_types": [
     "bin"

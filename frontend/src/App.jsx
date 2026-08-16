@@ -2244,9 +2244,28 @@ function App() {
             </span>
           )}
 
-          <span className="status-dot" />
+          <div
+            className="local-user-badge"
+            title={`Lab interno: ${
+              labInfo?.lab || 'local'
+            }`}
+          >
+            <span className="status-dot" />
 
-          {labInfo?.lab}
+            <span className="local-user-avatar">
+              FG
+            </span>
+
+            <span className="local-user-copy">
+              <strong>
+                Felipe Gaia
+              </strong>
+
+              <small>
+                Local user
+              </small>
+            </span>
+          </div>
         </div>
       </header>
 

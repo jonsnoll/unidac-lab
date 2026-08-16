@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "id": "cisco-iol-l2-switch",
-  "name": "Cisco IOL L2 Switch",
+  "name": "L2 Switch",
   "vendor": "cisco",
   "category": "switch",
   "kind": "network-appliance",
   "runtime": "iol",
   "driver": "cisco-iol",
-  "description": "Cisco IOL Layer 2 com core runtime, lifecycle e console habilitados. Dataplane conectado ainda pendente.",
+  "description": "Cisco IOL Layer 2 switch para laboratorios. Boot, lifecycle e console disponiveis.",
   "image_required": true,
   "image_types": [
     "bin"
